@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from backend.routes import router as api_router  
-from backend.voice import router as voice_router
+from api.routes import router as api_router  
+from api.voice import router as voice_router
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
