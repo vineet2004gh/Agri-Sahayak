@@ -10,6 +10,7 @@ venv/
 .coverage
 dist/
 build/
+myenv/
 
 # IDE/editor
 .vscode/
