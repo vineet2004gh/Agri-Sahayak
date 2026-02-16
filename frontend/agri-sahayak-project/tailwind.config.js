@@ -11,16 +11,16 @@ module.exports = {
         'agri-green': '#10B981',
         'agri-cream': '#FEFDF8',
         
-        // Enhanced Agricultural Palette
+        // Modern AI/Tech-Inspired Palette
         'agri': {
-          'primary': '#2D5016', // Deep forest green
-          'secondary': '#8B4513', // Rich earth brown
-          'accent': '#FFB347', // Warm harvest orange
-          'success': '#228B22', // Forest green
-          'warning': '#DAA520', // Golden rod
-          'info': '#4682B4', // Steel blue
-          'light': '#F5F5DC', // Beige
-          'dark': '#2F4F2F', // Dark slate gray
+          'primary': '#6366F1', // Modern indigo - AI/tech feel
+          'secondary': '#8B5CF6', // Vibrant purple
+          'accent': '#06B6D4', // Fresh cyan
+          'success': '#10B981', // Modern emerald green
+          'warning': '#F59E0B', // Warm amber
+          'info': '#3B82F6', // Bright blue
+          'light': '#F0F9FF', // Light sky blue
+          'dark': '#1E293B', // Modern slate
         },
         
         // Nature-inspired gradients

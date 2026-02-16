@@ -85,10 +85,10 @@ const App = () => {
               <img src="/logo_new.png" alt="Agri-Sahayak" className="h-10 w-10 rounded-xl bg-white/10 p-1.5 shadow-sm" />
               <div className="flex flex-col">
                 <span className="text-xl font-extrabold text-gray-800 dark:text-gray-100 leading-tight tracking-tight">
-                  {i18n.language === 'hi' ? 'एग्री‑सहायक' : 'Agri‑Sahayak'}
+                  AI Powered End to End System
                 </span>
                 <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                  {i18n.language === 'hi' ? 'एआई कृषि सहायक' : 'AI Agricultural Assistant'}
+                  {i18n.language === 'hi' ? 'एआई संचालित एंड-टू-एंड सिस्टम' : 'AI Powered End to End System'}
                 </span>
               </div>
             </div>
@@ -205,10 +205,10 @@ const App = () => {
               <img src="/logo_new.png" alt="Agri-sahayak" className="w-10 h-10 rounded-xl bg-white/10 p-1.5 shadow-sm" />
               <div className="text-left">
                 <h1 className="text-xl font-bold text-agri-primary dark:text-white group-hover:opacity-90">
-                  {i18n.language === 'hi' ? 'एग्री‑सहायक' : 'Agri-sahayak'}
+                  AI Powered End to End System
                 </h1>
                 <p className="text-xs text-agri-secondary dark:text-gray-400 font-medium group-hover:opacity-90">
-                  {i18n.language === 'hi' ? 'एआई कृषि सहायक' : 'AI Agricultural Assistant'}
+                  {i18n.language === 'hi' ? 'एआई संचालित एंड-टू-एंड सिस्टम' : 'AI Powered End to End System'}
                 </p>
               </div>
             </button>

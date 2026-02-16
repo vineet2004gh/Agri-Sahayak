@@ -242,8 +242,8 @@ const Profile = ({ onCreated, onBack }) => {
               <div className="w-18 h-18 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
                 <img src="/logo_new.png" alt="Agri‑Sahayak" className="w-14 h-14 rounded-2xl bg-white/15 p-2" />
               </div>
-              <h3 className="text-2xl font-bold mb-1">Agri‑Sahayak</h3>
-              <p className="text-white/85 text-xs uppercase tracking-wide opacity-80 mb-2">Personalized Agricultural Assistant</p>
+              <h3 className="text-2xl font-bold mb-1">AI Powered End to End System</h3>
+              <p className="text-white/85 text-xs uppercase tracking-wide opacity-80 mb-2">AI Powered End to End System</p>
               <div className="space-y-4 text-base opacity-95 text-left w-full max-w-xs mx-auto">
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">

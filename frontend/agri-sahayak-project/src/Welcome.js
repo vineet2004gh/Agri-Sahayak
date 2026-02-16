@@ -36,7 +36,7 @@ const Welcome = ({ onRegister, onSignIn }) => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 md:px-8 py-8 md:py-12 bg-gradient-to-br from-slate-50 to-emerald-50 dark:from-gray-950 dark:to-slate-900 relative">
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 md:px-8 py-8 md:py-12 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-950 dark:to-slate-900 relative">
       <div className="absolute inset-0 pointer-events-none opacity-[0.08]">
         <div className="w-full h-full bg-agri-pattern" />
       </div>
@@ -46,7 +46,7 @@ const Welcome = ({ onRegister, onSignIn }) => {
           <div className="flex items-center gap-4 mb-6">
             <img src="/logo_new.png" alt="Agri‑Sahayak" className="w-16 h-16 rounded-3xl bg-white/10 p-2 shadow-agri-md" />
             <div>
-              <h1 className="text-3xl md:text-[32px] leading-tight font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-agri-primary to-emerald-600 dark:from-emerald-300 dark:to-lime-300 mb-1">
+              <h1 className="text-3xl md:text-[32px] leading-tight font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 mb-1">
                 {t("welcomeToAgriSahayak")}
               </h1>
               <p className="text-agri-secondary dark:text-gray-400 font-medium">
@@ -130,14 +130,14 @@ const Welcome = ({ onRegister, onSignIn }) => {
         </div>
 
         {/* Right: Visual/brand panel */}
-        <div className="hidden md:flex items-center justify-center text-white p-10 lg:p-12 relative overflow-hidden bg-gradient-to-br from-emerald-600 to-agri-primary">
+        <div className="hidden md:flex items-center justify-center text-white p-10 lg:p-12 relative overflow-hidden bg-gradient-to-br from-indigo-600 to-purple-600">
           <div className="absolute inset-0 bg-agri-pattern opacity-10"></div>
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12"></div>
           <div className="space-y-6 text-center relative z-10">
             <img src="/logo_new.png" alt="Agri‑Sahayak" className="w-20 h-20 rounded-3xl mx-auto mb-6 backdrop-blur-sm bg-white/20 p-2" />
-            <h2 className="text-3xl font-bold mb-2 tracking-tight">Agri‑Sahayak</h2>
-            <p className="text-white/85 mb-2 text-sm uppercase tracking-wide opacity-80">{t('welcomeToAgriSahayak')}</p>
+            <h2 className="text-3xl font-bold mb-2 tracking-tight">AI Powered End to End System</h2>
+            <p className="text-white/85 mb-2 text-sm uppercase tracking-wide opacity-80">AI Powered End to End System</p>
             <div className="space-y-4 text-base opacity-95 text-left w-full max-w-xs mx-auto">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
