@@ -119,7 +119,7 @@ def _answer_with_rag(user_id: str, question: str) -> str:
     try:
         embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
         # Note: Older langchain-community versions (<0.0.15) don't support allow_dangerous_deserialization
-        vector_store = FAISS.load_local(index_dir, embeddings)
+        vector_store = FAISS.load_local(index_dir, embeddings,allow_dangerous_deserialization=True)
         docs = vector_store.similarity_search(question, k=3)
     except Exception as e:
         print(f"[VOICE][ERROR] Vector store init/search failed: {e}")

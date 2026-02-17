@@ -12,7 +12,7 @@ This script is NOT part of the FastAPI app. It will:
 """
 
 from __future__ import annotations
-
+import time
 import os
 import sys
 import shutil
@@ -85,15 +85,43 @@ def chunk_texts(page_texts: List[Tuple[int, str]], file_name: str) -> Tuple[List
     return chunks, metadatas
 
 
+import time
+
 def build_faiss_index(texts: List[str], metadatas: List[Dict[str, str]], output_dir: Path) -> None:
     # Remove old index folder to avoid stale files
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vector_store = FAISS.from_texts(texts=texts, embedding=embeddings, metadatas=metadatas)
-    vector_store.save_local(str(output_dir))
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-001",
+        task_type="retrieval_document"
+    )
+
+    # Process in batches to avoid 429 ResourceExhausted errors
+    batch_size = 10  # Adjust this (e.g., 50 or 20) if you still get errors
+    vector_store = None
+
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i : i + batch_size]
+        batch_metadatas = metadatas[i : i + batch_size]
+        
+        print(f"    - Processing batch {i//batch_size + 1} (chunks {i} to {min(i + batch_size, len(texts))})...")
+        
+        if vector_store is None:
+            vector_store = FAISS.from_texts(
+                texts=batch_texts, 
+                embedding=embeddings, 
+                metadatas=batch_metadatas
+            )
+        else:
+            vector_store.add_texts(texts=batch_texts, metadatas=batch_metadatas)
+        
+        # Give the API a break (10 seconds) between batches
+        time.sleep(15)
+
+    if vector_store:
+        vector_store.save_local(str(output_dir))
 
 
 def main() -> None:

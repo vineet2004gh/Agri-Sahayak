@@ -1,7 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from pydantic import v1 as pydantic_v1
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain.prompts import PromptTemplate
+import google.generativeai as genai
+from langchain_core.messages import HumanMessage
+from langchain_core.prompts import PromptTemplate
+from langchain.chains.question_answering import load_qa_chain
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
 import re
 import requests
 from datetime import datetime, timedelta
@@ -125,7 +131,7 @@ def get_conversational_chain():
         "Farmer's question: {question}\n\n"
         "Provide a helpful, conversational response:"
     )
-    model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
+    model = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
     return chain
@@ -136,7 +142,7 @@ def _fallback_translate_via_llm(text: str, src: str, dest: str) -> str:
     try:
         src_name = "Hindi" if src.startswith("hi") else ("English" if src.startswith("en") else src)
         dest_name = "Hindi" if dest.startswith("hi") else ("English" if dest.startswith("en") else dest)
-        model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.0)
+        model = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.0)
         prompt = (
             f"Translate the following text from {src_name} to {dest_name}. "
             "Only return the translated text without quotes or comments.\n\n"
@@ -390,8 +396,7 @@ async def ask(req: AskRequest):
 
     index_dir = os.path.join(os.path.dirname(__file__), "faiss_indexes", f"{user_state}_faiss_index")
 
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vector_store = None
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     if os.path.isdir(index_dir):
         try:
             try:
@@ -469,7 +474,7 @@ async def ask(req: AskRequest):
                 answer = str(response)
         else:
             # Fallback: no retrieval available, answer directly with LLM
-            llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
+            llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
             direct_prompt = (
                 "You are Agri-Sahayak, a friendly and practical AI advisor for Indian farmers. "
                 "Provide a concise, helpful answer using best practices even without external documents.\n\n"
@@ -486,7 +491,7 @@ async def ask(req: AskRequest):
     except Exception as e:
         # Last-resort fallback to direct LLM if chain failed
         try:
-            llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
+            llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
             resp = llm.invoke(processed_question)
             if hasattr(resp, 'content'):
                 answer = resp.content or ""
@@ -773,7 +778,7 @@ async def generate_price_response(context: str, question: str, user_language: st
         """
         
         llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-flash-latest",
             temperature=0.3,
             google_api_key=GOOGLE_API_KEY
         )
@@ -888,78 +893,81 @@ def generate_fallback_price_response(context: str, user_language: str) -> str:
 
 @router.post("/analyze_image")
 async def analyze_image(req: AnalyzeImageRequest):
-    """Analyze a crop image using a multimodal Gemini model and return a simple description."""
     user = fetch_user_by_id(req.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if not GOOGLE_API_KEY:
+        raise HTTPException(status_code=500, detail="Google API key missing")
+
     try:
-        # Debug: log incoming payload sizes (avoid printing image data itself)
-        try:
-            print(
-                f"[analyze_image] user={req.user_id} mime={req.mime_type} b64_len={len(req.image_base64 or '')}"
-            )
-        except Exception:
-            pass
-
-        import google.generativeai as genai
         genai.configure(api_key=GOOGLE_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
-
-        if not req.image_base64 or not isinstance(req.image_base64, str):
-            raise HTTPException(status_code=400, detail="image_base64 is required")
-        image_bytes = base64.b64decode(req.image_base64)
+        # ----------------------------
+        # 1. Validate Base64 Image
+        # ----------------------------
         try:
-            print(f"[analyze_image] decoded_bytes={len(image_bytes)}")
+            image_bytes = base64.b64decode(req.image_base64, validate=True)
         except Exception:
-            pass
-        # Basic sanity check: ensure we got non-trivial bytes
-        if not image_bytes or len(image_bytes) < 100:
-            raise HTTPException(status_code=400, detail="Invalid or too-small image payload. Please reattach a clear image.")
-        base_prompt = (
-            "You are an agricultural and veterinary assistant for farmers. "
-            "The image may contain: crop plants (leaves, stems, fruits), soil, pests, farm equipment, or livestock animals (e.g., cow, buffalo, goat, sheep, poultry). "
-            "Carefully analyze what is present and tailor your response accordingly. "
-            "For plants: describe visible signs of disease, pests, or nutrient deficiency; if healthy, say so. "
-            "For animals: describe visible signs (e.g., swelling, wounds, discharge, lesions, abnormal posture, body condition). "
-            "Provide simple, actionable next steps and risk flags. Avoid making a definitive medical diagnosis; include a disclaimer that a licensed veterinarian/extension officer should be consulted for confirmation and treatment. "
-            "Respond in clear plain text without any Markdown formatting (no **, *, #, or backticks). If you need a list, use simple numbered lines without bold."
+            raise HTTPException(status_code=400, detail="Invalid base64 image")
+
+        if len(image_bytes) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Image too large (max 5MB)")
+
+        # ----------------------------
+        # 2. Create Gemini Model
+        # ----------------------------
+        model = genai.GenerativeModel("gemini-flash-latest")
+
+        # ----------------------------
+        # 3. Send Multimodal Request
+        # ----------------------------
+        response = model.generate_content(
+            [
+                "Analyze this agricultural image and provide practical farming advice in simple language.",
+                {
+                    "mime_type": req.mime_type,
+                    "data": image_bytes,
+                },
+            ]
         )
-        # Detect user's preferred language
-        user_language = (user.get("language") or "").strip().lower()
-        is_hindi = _is_hindi_language(user_language)
 
-        # If question is provided in Hindi, translate to English for the model
-        extra = (req.question or "").strip()
-        if is_hindi and extra:
-            try:
-                extra = translate_text(extra, "hi", "en")
-            except Exception as _:
-                pass
+        # ----------------------------
+        # 4. Extract Text Safely
+        # ----------------------------
+        if not response or not response.text:
+            answer = "Unable to analyze image. Please upload a clearer photo."
+        else:
+            answer = response.text
 
-        full_prompt = base_prompt if not extra else f"{base_prompt}\nAdditional question/instructions: {extra}"
-        result = model.generate_content([
-            full_prompt,
-            {"mime_type": req.mime_type or "image/jpeg", "data": image_bytes},
-        ])
-        text = (result.text or "").strip()
-        if not text:
-            text = "I could not extract a description from the image. Please try another photo with good lighting and focus."
-        # Translate answer back to Hindi if needed
-        if is_hindi:
-            try:
-                text = translate_text(text, "en", "hi")
-            except Exception as _:
-                pass
-        # Ensure no Markdown symbols remain
-        text = _strip_markdown(text)
+    except HTTPException:
+        raise
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image analysis failed: {e}")
+        print("GEMINI ERROR:", str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Image analysis failed. Please try again."
+        )
 
-    conv_id = req.conversation_id or str(os.urandom(16).hex())
-    question_text = (req.question or "Analyze crop image").strip() or "Analyze crop image"
-    insert_conversation(req.user_id, question_text, text, conversation_id=conv_id)
-    return {"answer": text, "conversation_id": conv_id}
+    # ----------------------------
+    # 5. Store Conversation
+    # ----------------------------
+    try:
+        conv_id = req.conversation_id or os.urandom(16).hex()
+        insert_conversation(
+            req.user_id,
+            req.question or "Image analysis",
+            answer,
+            conversation_id=conv_id
+        )
+    except Exception as db_error:
+        print("DB ERROR:", str(db_error))
+        conv_id = None
+
+    return {
+        "answer": answer,
+        "conversation_id": conv_id
+    }
 
 
 @router.get("/users/{user_id}")
@@ -1310,7 +1318,7 @@ def fetch_weather_data_for_alerts(district):
             'units': 'metric'
         }
         
-        forecast_response = requests.get(forecast_url, params=forecast_params, timeout=10)
+        forecast_response = requests.get(forecast_url, params=forecast_params, timeout=100)
         forecast_response.raise_for_status()
         forecast_data = forecast_response.json()
         
