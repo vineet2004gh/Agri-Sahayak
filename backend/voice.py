@@ -476,7 +476,7 @@ async def voice_answer(
             vr.say("कृपया कुछ और प्रतीक्षा करें।", language="hi-IN")
         else:
             vr.say("Still working on it, one moment please.")
-        vr.pause(length=4)
+        vr.pause(length=10)
         vr.redirect("/voice/answer")
         return Response(content=str(vr), media_type="application/xml")
 

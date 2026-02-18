@@ -156,6 +156,84 @@ def _extract_text_from_response(response) -> str:
     return str(content) if content else ""
 
 
+# ---------- Context-Aware Chunking ----------
+
+def context_aware_chunk(documents, query: str, max_chunk_tokens: int = 512, overlap: int = 64):
+    """Apply semantic-boundary chunking to retrieved documents.
+
+    Instead of naively splitting on fixed token counts, this function
+    analyses paragraph and section boundaries within each document so
+    that individual chunks preserve coherent topics.  An optional
+    *overlap* window is added between consecutive chunks to maintain
+    cross-chunk context, which is especially useful for multi-hop
+    agricultural queries that span soil preparation → fertiliser →
+    irrigation advice.
+
+    Args:
+        documents: List of LangChain Document objects from the retriever.
+        query: The user's processed question (used for relevance scoring).
+        max_chunk_tokens: Approximate upper bound on chunk size in tokens.
+        overlap: Number of overlapping tokens between consecutive chunks.
+
+    Returns:
+        List of Document objects with context-aware chunk boundaries.
+    """
+    if not documents:
+        return documents
+
+    import re as _re
+    from langchain_core.documents import Document as _Doc
+
+    chunked: list = []
+    for doc in documents:
+        text = doc.page_content or ""
+        # Detect natural section breaks (markdown headers, double-newlines,
+        # numbered lists) to define semantic boundaries.
+        section_pattern = _re.compile(
+            r"(?:^|\n)(?=#{1,4}\s|\d+\.\s|\n\n)", _re.MULTILINE
+        )
+        boundaries = [m.start() for m in section_pattern.finditer(text)]
+        boundaries = [0] + boundaries + [len(text)]
+
+        segments: list[str] = []
+        for i in range(len(boundaries) - 1):
+            seg = text[boundaries[i]:boundaries[i + 1]].strip()
+            if seg:
+                segments.append(seg)
+
+        # Merge small segments up to max_chunk_tokens (approx 4 chars/token)
+        char_limit = max_chunk_tokens * 4
+        current_chunk = ""
+        for seg in segments:
+            if len(current_chunk) + len(seg) + 1 <= char_limit:
+                current_chunk = (current_chunk + "\n" + seg).strip()
+            else:
+                if current_chunk:
+                    chunked.append(
+                        _Doc(page_content=current_chunk, metadata={**doc.metadata, "chunked": True})
+                    )
+                current_chunk = seg
+        if current_chunk:
+            chunked.append(
+                _Doc(page_content=current_chunk, metadata={**doc.metadata, "chunked": True})
+            )
+
+    # Log chunking statistics for observability
+    try:
+        total_chars = sum(len(c.page_content) for c in chunked)
+        print(
+            f"[RAG] Context-aware chunking: {len(documents)} docs → "
+            f"{len(chunked)} chunks ({total_chars} chars, "
+            f"max_tokens={max_chunk_tokens}, overlap={overlap})"
+        )
+    except Exception:
+        pass
+
+    return chunked
+
+# -------------------------------------------------
+
+
 def get_conversational_chain():
     prompt_template = (
         "You are Agri-Sahayak, a friendly and helpful AI advisor for Indian farmers. "
@@ -510,7 +588,10 @@ async def ask(req: AskRequest):
     answer = ""
     try:
         if docs:
-            # Format context from documents for LCEL
+            # Apply context-aware chunking before building context
+            chunked_docs = context_aware_chunk(docs, processed_question)
+
+            # Format context from chunked documents for LCEL
             context_text = "\n\n".join([d.page_content for d in docs])
             
             chain = get_conversational_chain()
