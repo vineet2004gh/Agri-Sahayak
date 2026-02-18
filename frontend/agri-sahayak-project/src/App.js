@@ -21,6 +21,9 @@ const App = () => {
   const [isSidebarPinned, setIsSidebarPinned] = useState(false); // Manages pinned state
   const [sidebarKey, setSidebarKey] = useState(Date.now());
 
+
+
+
   const handleSelectCategory = async (category) => {
     try {
       const response = await axios.post('http://127.0.0.1:8000/conversations/start', {
@@ -50,7 +53,7 @@ const App = () => {
     try {
       localStorage.removeItem("user_id");
       localStorage.removeItem("user_name");
-    } catch {}
+    } catch { }
     setSelectedConversationId(null);
     setUserId(null);
     setShowProfile(false);
@@ -213,44 +216,33 @@ const App = () => {
               </div>
             </button>
             <div className="flex items-center space-x-3">
-               <button
-                 onClick={() => {
-                   const el = document.getElementById('voice-assistant');
-                   if (el) {
-                     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                   }
-                 }}
-                 className="px-3 py-2 rounded-xl bg-gradient-to-r from-agri-success to-agri-primary text-white text-sm font-semibold hover:from-agri-primary hover:to-agri-success transition-all duration-200 shadow-agri-sm"
-               >
-                 {i18n.language === 'hi' ? '📞 कॉल पर जाएं' : '📞 Request Call'}
-               </button>
-               <div className="inline-flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                 <button
-                   onClick={() => i18n.changeLanguage('en')}
-                   className={`px-3 py-2 text-sm font-semibold ${i18n.language === 'en' ? 'bg-agri-accent text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                 >EN</button>
-                 <button
-                   onClick={() => i18n.changeLanguage('hi')}
-                   className={`px-3 py-2 text-sm font-semibold ${i18n.language === 'hi' ? 'bg-agri-warning text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                 >हि</button>
-               </div>
-               <button
-                 onClick={() => {
-                   const newIsDark = !isDark;
-                   setIsDark(newIsDark);
-                   localStorage.setItem("theme", newIsDark ? "dark" : "light");
-                   document.documentElement.classList.toggle("dark", newIsDark);
-                 }}
-                 className="p-3 rounded-xl hover:bg-agri-info/10 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-105"
-                 title={t('toggleTheme')}
-               >
-                 {isDark ? (
-                   <Sun size={20} className="text-agri-warning" />
-                 ) : (
-                   <Moon size={20} className="text-agri-info" />
-                 )}
-               </button>
-             </div>
+              <div className="inline-flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <button
+                  onClick={() => i18n.changeLanguage('en')}
+                  className={`px-3 py-2 text-sm font-semibold ${i18n.language === 'en' ? 'bg-agri-accent text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                >EN</button>
+                <button
+                  onClick={() => i18n.changeLanguage('hi')}
+                  className={`px-3 py-2 text-sm font-semibold ${i18n.language === 'hi' ? 'bg-agri-warning text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                >हि</button>
+              </div>
+              <button
+                onClick={() => {
+                  const newIsDark = !isDark;
+                  setIsDark(newIsDark);
+                  localStorage.setItem("theme", newIsDark ? "dark" : "light");
+                  document.documentElement.classList.toggle("dark", newIsDark);
+                }}
+                className="p-3 rounded-xl hover:bg-agri-info/10 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-105"
+                title={t('toggleTheme')}
+              >
+                {isDark ? (
+                  <Sun size={20} className="text-agri-warning" />
+                ) : (
+                  <Moon size={20} className="text-agri-info" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -264,7 +256,10 @@ const App = () => {
             />
           ) : (
             <>
-              <Dashboard userId={userId} />
+              <Dashboard
+                userId={userId}
+
+              />
               <div className="mt-6 md:mt-8">
                 <CategorySelector onSelectCategory={handleSelectCategory} />
               </div>

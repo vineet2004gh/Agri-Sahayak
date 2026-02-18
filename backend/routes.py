@@ -4,10 +4,11 @@ from pydantic import v1 as pydantic_v1
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 import google.generativeai as genai
 from langchain_core.messages import HumanMessage
-from langchain_core.prompts import PromptTemplate
-from langchain.chains.question_answering import load_qa_chain
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_huggingface import HuggingFaceEmbeddings
 import re
 import requests
 from datetime import datetime, timedelta
@@ -28,7 +29,6 @@ from .database import (
     hash_password,
     verify_password,
 )
-from langchain.chains.question_answering import load_qa_chain
 from langchain_community.vectorstores import FAISS
 from typing import Optional
 import base64
@@ -114,26 +114,75 @@ def _load_global_vector_store() -> FAISS:
     return _global_vector_store
 
 
+def _extract_text_from_response(response) -> str:
+    """Extract clean text from a ChatGoogleGenerativeAI response.
+    
+    Gemini models sometimes return content as a list of parts like
+    [{'type': 'text', 'text': '...', 'extras': {...}}] instead of a plain string.
+    This function handles both cases.
+    """
+    # If it's already a string, just return it
+    if isinstance(response, str):
+        return response
+    
+    # If it's an AIMessage, get the content
+    content = getattr(response, 'content', response)
+    
+    # If content is a list of parts (Gemini structured output)
+    if isinstance(content, list):
+        texts = []
+        for part in content:
+            if isinstance(part, dict) and "text" in part:
+                texts.append(part["text"])
+            elif isinstance(part, str):
+                texts.append(part)
+        return "".join(texts) if texts else str(content)
+    
+    # If content is a string that looks like a list of dicts
+    if isinstance(content, str) and content.strip().startswith("["):
+        import json, ast
+        try:
+            try:
+                parsed = json.loads(content)
+            except Exception:
+                parsed = ast.literal_eval(content)
+            if isinstance(parsed, list):
+                texts = [item["text"] for item in parsed if isinstance(item, dict) and "text" in item]
+                if texts:
+                    return "".join(texts)
+        except Exception:
+            pass
+    
+    return str(content) if content else ""
+
+
 def get_conversational_chain():
     prompt_template = (
         "You are Agri-Sahayak, a friendly and helpful AI advisor for Indian farmers. "
-        "Your role is to provide practical, easy-to-understand agricultural advice in a conversational tone. "
-        "Always be helpful, encouraging, and focus on actionable steps that farmers can implement.\n\n"
-        "Guidelines for your responses:\n"
-        "- Keep answers conversational and friendly, like talking to a friend\n"
-        "- Focus on practical, actionable advice rather than technical details\n"
-        "- If the context has specific information, use it but explain it simply\n"
-        "- If you don't have specific information, provide general best practices\n"
-        "- Always encourage farmers to consult local agricultural experts for specific conditions\n"
-        "- Keep responses concise but informative (2-4 paragraphs maximum)\n"
-        "- Use simple language that farmers can easily understand\n\n"
-        "Context from agricultural guides: {context}\n"
-        "Farmer's question: {question}\n\n"
-        "Provide a helpful, conversational response:"
+        "Your role is to provide practical, easy-to-understand agricultural advice in a conversational tone.\n\n"
+        "STRICT OUTPUT FORMAT:\n"
+        "- Use Markdown headers (###) for sections.\n"
+        "- Use **bold** for key terms.\n"
+        "- Use bullet points for lists.\n"
+        "- Separate sections with horizontal rules (---).\n"
+        "- Include a 'Current Challenges' or 'Regional Examples' section if relevant.\n\n"
+        "Guidelines:\n"
+        "- Keep answers conversational yet structured.\n"
+        "- Focus on practical, actionable advice.\n"
+        "- If context is available, use it effectively.\n"
+        "- Concise (2-4 paragraphs max per section).\n\n"
+        "Context: {context}\n"
+        "Question: {question}\n\n"
+        "Response:"
     )
-    model = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
-    prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
-    chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
+    model = ChatGoogleGenerativeAI(
+        model="gemini-flash-latest",
+        temperature=0.3,
+        timeout=120,
+    )
+    prompt = ChatPromptTemplate.from_template(prompt_template)
+    # Use prompt | model, then extract text with our custom function
+    chain = prompt | model
     return chain
 
 
@@ -461,20 +510,16 @@ async def ask(req: AskRequest):
     answer = ""
     try:
         if docs:
+            # Format context from documents for LCEL
+            context_text = "\n\n".join([d.page_content for d in docs])
+            
             chain = get_conversational_chain()
-            response = chain.invoke({"input_documents": docs, "question": processed_question})
-            # Properly extract the answer text from LangChain response
-            if hasattr(response, 'content'):
-                answer = response.content
-            elif hasattr(response, 'output_text'):
-                answer = response.output_text
-            elif isinstance(response, dict):
-                answer = response.get("output_text") or response.get("content") or ""
-            else:
-                answer = str(response)
+            # Chain returns AIMessage; extract clean text
+            response = chain.invoke({"context": context_text, "question": processed_question})
+            answer = _extract_text_from_response(response)
         else:
             # Fallback: no retrieval available, answer directly with LLM
-            llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
+            llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3, timeout=120)
             direct_prompt = (
                 "You are Agri-Sahayak, a friendly and practical AI advisor for Indian farmers. "
                 "Provide a concise, helpful answer using best practices even without external documents.\n\n"
@@ -482,23 +527,13 @@ async def ask(req: AskRequest):
                 "Answer:"
             )
             resp = llm.invoke(direct_prompt)
-            if hasattr(resp, 'content'):
-                answer = resp.content or ""
-            elif hasattr(resp, 'output_text'):
-                answer = resp.output_text or ""
-            else:
-                answer = str(resp)
+            answer = _extract_text_from_response(resp)
     except Exception as e:
         # Last-resort fallback to direct LLM if chain failed
         try:
-            llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
+            llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3, timeout=120)
             resp = llm.invoke(processed_question)
-            if hasattr(resp, 'content'):
-                answer = resp.content or ""
-            elif hasattr(resp, 'output_text'):
-                answer = resp.output_text or ""
-            else:
-                answer = str(resp)
+            answer = _extract_text_from_response(resp)
         except Exception as e2:
             raise HTTPException(status_code=500, detail=f"Unable to generate answer: {e2}")
     
@@ -511,6 +546,44 @@ async def ask(req: AskRequest):
         # Remove quotes if present
         if (answer.startswith("'") and answer.endswith("'")) or (answer.startswith('"') and answer.endswith('"')):
             answer = answer[1:-1].strip()
+
+    # Persist conversation with conversation_id
+    conv_id = req.conversation_id or str(os.urandom(16).hex())
+    # 1. First, check if the answer is a string that looks like a dictionary
+    import json
+    import ast
+
+    # 0. Check for list of dicts (Gemini structured output)
+    if isinstance(answer, str) and answer.strip().startswith("["):
+        try:
+            try:
+                answer_list = json.loads(answer)
+            except Exception:
+                answer_list = ast.literal_eval(answer)
+            
+            if isinstance(answer_list, list) and len(answer_list) > 0:
+                 texts = []
+                 for item in answer_list:
+                     if isinstance(item, dict) and "text" in item:
+                         texts.append(item["text"])
+                 if texts:
+                     answer = "".join(texts)
+        except Exception:
+            pass
+
+    if isinstance(answer, str) and answer.strip().startswith("{"):
+        try:
+            try:
+                answer_dict = json.loads(answer)
+            except json.JSONDecodeError:
+                answer_dict = ast.literal_eval(answer)
+                
+            if isinstance(answer_dict, dict):
+                answer = answer_dict.get("text") or answer_dict.get("content") or answer
+        except Exception:
+            pass
+    # -------------------------------
+
 
     # If user prefers Hindi, translate the English answer back to Hindi
     if _is_hindi_language(user_language):
@@ -536,7 +609,18 @@ async def ask(req: AskRequest):
 
     # Persist conversation with conversation_id
     conv_id = req.conversation_id or str(os.urandom(16).hex())
-    insert_conversation(req.user_id, original_question, answer, conversation_id=conv_id)
+
+
+
+    # 3. FINAL SAFETY CHECK: Ensure it's not a list or dict before DB
+    if not isinstance(answer, str):
+        answer = str(answer)
+    
+    # Persist the conversation
+    try:
+        insert_conversation(req.user_id, original_question, answer, conversation_id=conv_id)
+    except Exception as e:
+        print(f"Failed to save conversation: {e}")
 
     return {"answer": answer, "conversation_id": conv_id}
 
@@ -1287,12 +1371,53 @@ DISTRICT_COORDINATES = {
     'gorakhpur': (26.7606, 83.3732)
 }
 
+def get_coordinates(district):
+    """Get coordinates for a district, trying hardcoded list then Geocoding API"""
+    # 1. Try exact match in hardcoded list
+    if district in DISTRICT_COORDINATES:
+        return DISTRICT_COORDINATES[district]
+    
+    # 2. Try normalized match (case-insensitive)
+    district_lower = district.lower().strip()
+    if district_lower in DISTRICT_COORDINATES:
+        return DISTRICT_COORDINATES[district_lower]
+
+    # 3. Try variations (remove "urban", "rural", "district")
+    for key in DISTRICT_COORDINATES:
+        if key in district_lower or district_lower in key:
+            return DISTRICT_COORDINATES[key]
+
+    # 4. Fallback to OpenWeatherMap Geocoding API
+    OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "05b6e91c54291c719f5226c3ff40a9a5")
+    try:
+        # Try raw district name
+        geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={district}&limit=1&appid={OPENWEATHER_API_KEY}"
+        resp = requests.get(geo_url, timeout=5)
+        if resp.status_code == 200 and resp.json():
+            data = resp.json()[0]
+            return (data['lat'], data['lon'])
+            
+        # Try stripping common suffixes if raw failed
+        clean_district = district_lower.replace(" urban", "").replace(" rural", "").replace(" district", "").strip()
+        if clean_district != district_lower:
+            geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={clean_district}&limit=1&appid={OPENWEATHER_API_KEY}"
+            resp = requests.get(geo_url, timeout=5)
+            if resp.status_code == 200 and resp.json():
+                data = resp.json()[0]
+                return (data['lat'], data['lon'])
+                
+    except Exception as e:
+        print(f"Geocoding API failed for {district}: {e}")
+        
+    return None
+
 def fetch_weather_data_for_alerts(district):
     """Fetch weather data for alerts using OpenWeatherMap API"""
-    if district not in DISTRICT_COORDINATES:
+    coords = get_coordinates(district)
+    if not coords:
         return None
     
-    lat, lon = DISTRICT_COORDINATES[district]
+    lat, lon = coords
     OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "05b6e91c54291c719f5226c3ff40a9a5")
     
     try:

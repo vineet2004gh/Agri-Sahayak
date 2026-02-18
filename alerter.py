@@ -68,6 +68,110 @@ DISTRICT_COORDINATES = {
     'gorakhpur': (26.7606, 83.3732)
 }
 
+CROP_ACTIVITIES = {
+    "wheat": {
+        "august": ["Land preparation", "Seed treatment"],
+        "september": ["Sowing", "First irrigation"],
+        "october": ["Weed control", "Fertilizer application"],
+        "november": ["Pest monitoring", "Second irrigation"],
+        "december": ["Growth monitoring", "Disease prevention"],
+        "january": ["Pre-harvest check", "Harvesting preparation"],
+    },
+    "rice": {
+        "june": ["Nursery preparation", "Seed selection"],
+        "july": ["Transplanting", "Water management"],
+        "august": ["Weed management", "Nutrient application"],
+        "september": ["Pest and disease control", "Mid-season irrigation"],
+        "october": ["Flowering stage care", "Grain filling monitoring"],
+        "november": ["Harvesting", "Post-harvest handling"],
+    },
+    "sugarcane": {
+        "january": ["Planting", "Initial irrigation"],
+        "february": ["Weed control", "Gap filling"],
+        "march": ["Fertilizer application", "Earthing up"],
+        "april": ["Propping and tying", "Pest management"],
+        "may": ["Irrigation management", "Growth monitoring"],
+        "june": ["Pre-monsoon care", "Disease scouting"],
+        "july": ["Monsoon management", "Drainage check"],
+        "august": ["Tying and propping", "Top dressing"],
+        "september": ["Ripening monitoring", "Pest control"],
+        "october": ["Harvesting preparation", "Seed cane selection"],
+        "november": ["Harvesting", "Ratoon management"],
+        "december": ["Harvesting continues", "Field cleaning"],
+    },
+    "cotton": {
+        "may": ["Land preparation", "Sowing"],
+        "june": ["Thinning", "Weed control"],
+        "july": ["Fertilizer top dressing", "Pest scouting"],
+        "august": ["Flowering and boll formation care", "Irrigation"],
+        "september": ["Bollworm management", "Nutrient spray"],
+        "october": ["Picking of cotton", "Quality management"],
+        "november": ["Second picking", "Pest clean-up"],
+    },
+    "maize": {
+        "june": ["Sowing", "Weed management"],
+        "july": ["Nitrogen top dressing", "Irrigation"],
+        "august": ["Pest control (stem borer)", "Tasseling and silking care"],
+        "september": ["Grain filling", "Harvesting for fodder (if any)"],
+        "october": ["Harvesting", "Drying and storage"],
+    },
+    "ragi": {
+        "june": ["Nursery raising / direct sowing", "Seed treatment"],
+        "july": ["Transplanting (if nursery)", "First weeding and gap filling"],
+        "august": ["Top dressing of nitrogen", "Weed management"],
+        "september": ["Pest and disease scouting", "Irrigation as needed"],
+        "october": ["Ear head emergence care", "Foliar nutrition if required"],
+        "november": ["Harvesting at physiological maturity", "Threshing and drying"],
+    },
+    "millet": {
+        "june": ["Field preparation", "Sowing of bajra/pearl millet"],
+        "july": ["Thinning and weeding", "Basal/Top fertilizer application"],
+        "august": ["Pest monitoring (shoot fly/aphids)", "Moisture conservation"],
+        "september": ["Ear emergence care", "Disease management (downy mildew)"],
+        "october": ["Harvesting at 15–20% grain moisture", "Drying and storage"],
+    },
+}
+
+def normalize_crop_name(crop: str) -> str:
+    """Normalize user-provided crop names to canonical keys."""
+    c = (crop or "").strip().lower()
+    mapping = {
+        "wheat": "wheat", "गेहूं": "wheat", "गेहुँ": "wheat", "गेहूँ": "wheat",
+        "rice": "rice", "paddy": "rice", "धान": "rice", "चावल": "rice",
+        "sugarcane": "sugarcane", "गन्ना": "sugarcane",
+        "cotton": "cotton", "कपास": "cotton",
+        "maize": "maize", "corn": "maize", "मक्का": "maize",
+        "soybean": "soybean", "सोयाबीन": "soybean",
+        "mustard": "mustard", "सरसों": "mustard",
+        "onion": "onion", "प्याज": "onion",
+        "potato": "potato", "आलू": "potato",
+        "tomato": "tomato", "टमाटर": "tomato",
+        "ragi": "ragi", "finger millet": "ragi", "mandua": "ragi", "nachni": "ragi",
+        "millet": "millet", "millets": "millet", "bajra": "millet", "pearl millet": "millet",
+    }
+    return mapping.get(c, c)
+
+def analyze_crop_alerts(user_crop):
+    """Analyze crop for alerts based on current month"""
+    if not user_crop:
+        return []
+
+    alerts = []
+    current_month = datetime.now().strftime("%B").lower()
+    normalized_crop = normalize_crop_name(user_crop)
+
+    if normalized_crop in CROP_ACTIVITIES:
+        activities = CROP_ACTIVITIES[normalized_crop].get(current_month, [])
+        if activities:
+            activities_str = ", ".join(activities)
+            alerts.append({
+                'type': 'crop_calendar',
+                'message': f"Crop care for {normalized_crop.title()}: {activities_str}. Ensure timely action.",
+                'severity': 'medium'
+            })
+            
+    return alerts
+
 def create_database_connection():
     """Create and return database engine and session"""
     try:
@@ -100,13 +204,56 @@ def get_unique_districts(users):
     logger.info(f"Found {len(districts)} unique districts: {list(districts)}")
     return list(districts)
 
+def get_coordinates(district):
+    """Get coordinates for a district, trying hardcoded list then Geocoding API"""
+    # 1. Try exact match in hardcoded list
+    if district in DISTRICT_COORDINATES:
+        return DISTRICT_COORDINATES[district]
+    
+    # 2. Try normalized match (case-insensitive)
+    district_lower = district.lower().strip()
+    if district_lower in DISTRICT_COORDINATES:
+        return DISTRICT_COORDINATES[district_lower]
+
+    # 3. Try variations (remove "urban", "rural", "district")
+    for key in DISTRICT_COORDINATES:
+        if key in district_lower or district_lower in key:
+            return DISTRICT_COORDINATES[key]
+
+    # 4. Fallback to OpenWeatherMap Geocoding API
+    try:
+        # Try raw district name
+        geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={district}&limit=1&appid={OPENWEATHER_API_KEY}"
+        resp = requests.get(geo_url, timeout=5)
+        if resp.status_code == 200 and resp.json():
+            data = resp.json()[0]
+            logger.info(f"Geocoding successful for {district}: {data['lat']}, {data['lon']}")
+            return (data['lat'], data['lon'])
+            
+        # Try stripping common suffixes if raw failed
+        clean_district = district_lower.replace(" urban", "").replace(" rural", "").replace(" district", "").strip()
+        if clean_district != district_lower:
+            geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={clean_district}&limit=1&appid={OPENWEATHER_API_KEY}"
+            resp = requests.get(geo_url, timeout=5)
+            if resp.status_code == 200 and resp.json():
+                data = resp.json()[0]
+                logger.info(f"Geocoding successful for {clean_district}: {data['lat']}, {data['lon']}")
+                return (data['lat'], data['lon'])
+                
+    except Exception as e:
+        logger.error(f"Geocoding API failed for {district}: {e}")
+        
+    return None
+
 def fetch_weather_data(district):
     """Fetch weather data for a specific district using OpenWeatherMap API"""
-    if district not in DISTRICT_COORDINATES:
+    coords = get_coordinates(district)
+    
+    if not coords:
         logger.warning(f"Coordinates not found for district: {district}")
         return None
     
-    lat, lon = DISTRICT_COORDINATES[district]
+    lat, lon = coords
     
     try:
         # Use current weather API (always available on free tier)
@@ -292,10 +439,8 @@ def build_sms_message(user_name, district, alerts, max_len=140):
 
     return ascii_text
 
-def send_sms_alerts(users_in_district, alerts, district):
+def send_sms_alerts(users_in_district, weather_alerts, district):
     """Send SMS alerts to users in the affected district"""
-    if not alerts:
-        return
     # If dry-run, don't initialize Twilio
     client = None
     if not DRY_RUN:
@@ -315,9 +460,17 @@ def send_sms_alerts(users_in_district, alerts, district):
         if not user.phone_number:
             continue
         
+        # Get crop alerts for this user
+        crop_alerts = analyze_crop_alerts(user.crop)
+        
         # Combine all alerts for this user
+        user_alerts = weather_alerts + crop_alerts
+        
+        if not user_alerts:
+            continue
+
         alert_messages = []
-        for alert in alerts:
+        for alert in user_alerts:
             alert_messages.append(alert['message'])
         
         # Create full, rich message (frontend/logs)
@@ -326,7 +479,7 @@ def send_sms_alerts(users_in_district, alerts, district):
         message_body += f"\n\nStay safe and protect your crops. For more farming tips, visit Agri-Sahayak app."
 
         # Create compact SMS-safe message (ASCII-only, limited length)
-        sms_message_body = build_sms_message(user.name, district, alerts)
+        sms_message_body = build_sms_message(user.name, district, user_alerts)
         
         # Normalize/check recipient number format
         to_number = user.phone_number.strip()
@@ -392,14 +545,11 @@ def main():
             
             # Fetch weather data
             weather_data = fetch_weather_data(district)
-            if not weather_data:
-                continue
             
-            # Analyze for alerts
-            alerts = analyze_weather_alerts(weather_data, district)
-            if not alerts:
-                logger.info(f"No alerts generated for {district}")
-                continue
+            # Analyze for weather alerts (might be empty)
+            weather_alerts = []
+            if weather_data:
+                weather_alerts = analyze_weather_alerts(weather_data, district)
             
             # Find users in this district
             users_in_district = [
@@ -411,13 +561,13 @@ def main():
                 logger.warning(f"No users found for district: {district}")
                 continue
             
-            logger.info(f"Sending alerts to {len(users_in_district)} users in {district}")
+            logger.info(f"Checking alerts for {len(users_in_district)} users in {district}")
             
-            # Send SMS alerts
-            send_sms_alerts(users_in_district, alerts, district)
-            total_alerts_sent += len(users_in_district) * len(alerts)
-        
-        logger.info(f"Alerting system completed. Total alerts processed: {total_alerts_sent}")
+            # Send SMS alerts (combines weather + crop)
+            send_sms_alerts(users_in_district, weather_alerts, district)
+            # Note: total_alerts_sent logic is approximate here as it depends on per-user results
+            
+        logger.info(f"Alerting system completed.")
         
     except Exception as e:
         logger.error(f"Error in main execution: {e}")

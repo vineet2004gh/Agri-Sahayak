@@ -11,14 +11,18 @@ from .database import (
     insert_conversation,
 )
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.prompts import PromptTemplate
-from langchain.chains.question_answering import load_qa_chain
 from langchain_community.vectorstores import FAISS
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate
 from deep_translator import GoogleTranslator
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.output_parsers import StrOutputParser
+from operator import itemgetter
 import asyncio
 import inspect
 import os
 import traceback
+import time
 from dotenv import load_dotenv
 
 router = APIRouter()
@@ -95,6 +99,30 @@ def _is_hindi_language(value: str) -> bool:
     return l in {"hindi", "hi", "हिन्दी", "हिंदी"} or ("हिं" in l) or ("हिन्द" in l)
 
 
+
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+
+# Global cache for heavy resources
+_EMBEDDINGS_MODEL = None
+_VECTOR_STORE_CACHE = {}
+
+def _get_embeddings_model():
+    global _EMBEDDINGS_MODEL
+    if _EMBEDDINGS_MODEL is None:
+        print("[VOICE] Loading HuggingFace embeddings model...")
+        _EMBEDDINGS_MODEL = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    return _EMBEDDINGS_MODEL
+
+def _get_vector_store(index_dir: str):
+    if index_dir not in _VECTOR_STORE_CACHE:
+        print(f"[VOICE] Loading FAISS index from {index_dir}...")
+        embeddings = _get_embeddings_model()
+        # Note: Older langchain-community versions (<0.0.15) don't support allow_dangerous_deserialization
+        _VECTOR_STORE_CACHE[index_dir] = FAISS.load_local(index_dir, embeddings, allow_dangerous_deserialization=True)
+    return _VECTOR_STORE_CACHE[index_dir]
+
 def _answer_with_rag(user_id: str, question: str) -> str:
     user = fetch_user_by_id(user_id)
     if not user:
@@ -116,51 +144,84 @@ def _answer_with_rag(user_id: str, question: str) -> str:
         print(f"[VOICE][ERROR] Could not load FAISS index for state='{user_state}': {e}")
         raise
 
+    # Timing
+    t0 = time.time()
     try:
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-        # Note: Older langchain-community versions (<0.0.15) don't support allow_dangerous_deserialization
-        vector_store = FAISS.load_local(index_dir, embeddings,allow_dangerous_deserialization=True)
+        vector_store = _get_vector_store(index_dir)
         docs = vector_store.similarity_search(question, k=3)
+        t1 = time.time()
+        print(f"[VOICE] Search took {t1 - t0:.2f}s")
     except Exception as e:
         print(f"[VOICE][ERROR] Vector store init/search failed: {e}")
         traceback.print_exc()
         raise
+    prompt = ChatPromptTemplate.from_template(
+        """
+    You are Agri-Sahayak, a friendly and helpful AI advisor for Indian farmers.
+    Provide practical, easy-to-understand advice.
 
-    prompt_template = (
-        "You are Agri-Sahayak, a friendly and helpful AI advisor for Indian farmers. "
-        "Your role is to provide practical, easy-to-understand agricultural advice in a conversational tone. "
-        "Always be helpful, encouraging, and focus on actionable steps that farmers can implement.\n\n"
-        "Guidelines for your responses:\n"
-        "- Keep answers conversational and friendly, like talking to a friend\n"
-        "- Focus on practical, actionable advice rather than technical details\n"
-        "- If the context has specific information, use it but explain it simply\n"
-        "- If you don't have specific information, provide general best practices\n"
-        "- Always encourage farmers to consult local agricultural experts for specific conditions\n"
-        "- Keep responses concise but informative (2-4 paragraphs maximum)\n"
-        "- Use simple language that farmers can easily understand\n\n"
-        "Context from agricultural guides: {context}\n"
-        "Farmer's question: {question}\n\n"
-        "Provide a helpful, conversational response:"
+    Guidelines:
+    - Conversational and friendly tone
+    - Focus on actionable steps
+    - Use context if relevant
+    - Keep response 2-4 paragraphs
+    - Encourage consulting local experts
+
+    Context:
+    {context}
+
+    Farmer's question:
+    {input}
+_
+    Helpful response:
+    """
     )
-    model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
-    prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
-    chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
+
+    model = ChatGoogleGenerativeAI(
+        model="gemini-flash-latest",
+        temperature=0.3,
+        timeout=120,
+    )
+
+    # Create retriever from vector store
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+
+    # Create LCEL chain
+    chain = (
+        {
+            "context": itemgetter("input") | retriever | format_docs,
+            "input": itemgetter("input"),
+        }
+        | prompt
+        | model
+    )
+
     try:
-        response = chain.invoke({"input_documents": docs, "question": question})
+        t2 = time.time()
+        response = chain.invoke({"input": question})
+        t3 = time.time()
+        print(f"[VOICE] Generate took {t3 - t2:.2f}s")
+        
+        # Extract clean text from response (handles Gemini structured content parts)
+        content = getattr(response, 'content', response)
+        if isinstance(content, list):
+            texts = []
+            for part in content:
+                if isinstance(part, dict) and "text" in part:
+                    texts.append(part["text"])
+                elif isinstance(part, str):
+                    texts.append(part)
+            answer = "".join(texts) if texts else str(content)
+        elif isinstance(content, str):
+            answer = content
+        else:
+            answer = str(content) if content else ""
     except Exception as e:
-        print(f"[VOICE][ERROR] QA chain invocation failed: {e}")
+        print(f"[VOICE][ERROR] Retrieval chain failed: {e}")
         traceback.print_exc()
         raise
-    
-    # Properly extract the answer text from LangChain response
-    if hasattr(response, 'content'):
-        answer = response.content
-    elif hasattr(response, 'output_text'):
-        answer = response.output_text
-    elif isinstance(response, dict):
-        answer = response.get("output_text") or response.get("content") or ""
-    else:
-        answer = str(response)
+
+   
     
     # Clean up the answer - remove any extra formatting
     if isinstance(answer, str):
@@ -313,6 +374,8 @@ async def voice_process(
     from_num = (From_ or "").strip()
     to_num = (To or "").strip()
     speech = (SpeechResult or "").strip()
+    call_sid = (CallSid or "").strip()
+
     # Determine actual user by trying all provided numbers
     user = None
     for num in [n for n in [caller, from_num, to_num] if n]:
@@ -332,14 +395,14 @@ async def voice_process(
 
     # Lookup user by phone
     if not user:
-        # Default to English if user not found
         vr.say(
             "We could not find your phone number in our system. Please register on the website first."
         )
         vr.hangup()
         return Response(content=str(vr), media_type="application/xml")
 
-    # Translate-Process-Translate for Hindi
+    # --- START RAG IN BACKGROUND ---
+    # Translate question if Hindi
     processed_question = speech
     if is_hindi:
         try:
@@ -356,41 +419,75 @@ async def voice_process(
                 pass
             processed_question = speech
 
-    # Run RAG using processed question (English for Hindi users)
-    try:
-        answer = _answer_with_rag(user_id=user["id"], question=processed_question)
-    except Exception as e:
-        try:
-            uid = user.get("id") if user else None
-            print(f"[VOICE][ERROR] RAG failure for user_id={uid}: {e}")
-            traceback.print_exc()
-        except Exception:
-            pass
-        answer = "We faced a technical issue answering your question. Please try again later."
+    # Store pending answer and kick off background thread
+    import threading
+    _pending_answers[call_sid] = {"status": "processing", "answer": None, "user": user, "is_hindi": is_hindi}
 
-    # If Hindi user, translate answer back to Hindi
-    if is_hindi:
+    def _run_rag_background(sid, uid, question, hindi):
         try:
-            english_answer = answer
-            try:
-                print(f"--- RAW ENGLISH ANSWER TO BE TRANSLATED (VOICE): {english_answer} ---")
-            except Exception:
-                pass
-            answer_hi = await translate_text_async(english_answer, "en", "hi")
-            try:
-                print(f"--- SUCCESSFULLY TRANSLATED TO HINDI (VOICE): {answer_hi} ---")
-            except Exception:
-                pass
-            answer = answer_hi
+            ans = _answer_with_rag(user_id=uid, question=question)
+            # If Hindi, translate answer
+            if hindi:
+                try:
+                    import asyncio as _aio
+                    loop = _aio.new_event_loop()
+                    ans = loop.run_until_complete(translate_text_async(ans, "en", "hi"))
+                    loop.close()
+                except Exception as te:
+                    print(f"[VOICE] Hindi translation failed in background: {te}")
+            _pending_answers[sid] = {"status": "done", "answer": ans, "is_hindi": hindi}
         except Exception as e:
-            try:
-                print(f"--- ERROR DURING HINDI TRANSLATION (VOICE): {e} ---")
-            except Exception:
-                pass
+            print(f"[VOICE][ERROR] Background RAG failed: {e}")
+            traceback.print_exc()
+            err_msg = "हम आपके प्रश्न का उत्तर नहीं दे सके। कृपया बाद में प्रयास करें।" if hindi else "We faced a technical issue. Please try again later."
+            _pending_answers[sid] = {"status": "done", "answer": err_msg, "is_hindi": hindi}
 
-    # Respond and loop
+    t = threading.Thread(target=_run_rag_background, args=(call_sid, user["id"], processed_question, is_hindi))
+    t.daemon = True
+    t.start()
+
+    # Respond immediately — don't block Twilio
     if is_hindi:
-        # answer is already Hindi via translate-process-translate, speak with Hindi voice
+        vr.say("कृपया प्रतीक्षा करें, मैं आपके लिए उत्तर खोज रहा हूँ।", language="hi-IN")
+    else:
+        vr.say("Please wait while I find an answer for you.")
+    vr.pause(length=3)
+    vr.redirect("/voice/answer")
+    return Response(content=str(vr), media_type="application/xml")
+
+
+# In-memory store for pending answers (keyed by CallSid)
+_pending_answers: dict = {}
+
+
+@router.post("/voice/answer")
+async def voice_answer(
+    CallSid: Optional[str] = Form(default=None),
+):
+    """Poll for the RAG answer. If ready, speak it; otherwise wait and redirect again."""
+    sid = (CallSid or "").strip()
+    vr = VoiceResponse()
+
+    pending = _pending_answers.get(sid)
+    if not pending or pending["status"] != "done":
+        # Answer not ready yet — wait a bit and redirect back
+        is_hindi = (pending or {}).get("is_hindi", False)
+        if is_hindi:
+            vr.say("कृपया कुछ और प्रतीक्षा करें।", language="hi-IN")
+        else:
+            vr.say("Still working on it, one moment please.")
+        vr.pause(length=4)
+        vr.redirect("/voice/answer")
+        return Response(content=str(vr), media_type="application/xml")
+
+    # Answer is ready!
+    answer = pending["answer"]
+    is_hindi = pending.get("is_hindi", False)
+
+    # Clean up
+    _pending_answers.pop(sid, None)
+
+    if is_hindi:
         vr.say(answer, language="hi-IN")
         vr.say("क्या आपके पास कोई और प्रश्न है?", language="hi-IN")
         gather = Gather(

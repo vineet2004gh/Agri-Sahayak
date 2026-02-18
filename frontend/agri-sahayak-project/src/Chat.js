@@ -42,130 +42,130 @@ const ConversationHistory = ({
       {conversation
         .filter(entry => !entry.question?.startsWith('Started conversation in category:'))
         .map((entry, index) => (
-        <div key={index} className="space-y-4">
-          {/* User Message */}
-          <div className="flex justify-end agri-fade-in">
-            <div className="flex items-start gap-4 max-w-[85%] md:max-w-[75%]">
-              <div className="chat-bubble-user flex-1 text-sm leading-relaxed font-medium">
-                {entry.question}
-              </div>
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-agri-primary to-agri-success flex items-center justify-center shadow-agri-md ring-2 ring-white/20">
-                <User size={18} className="text-white" />
+          <div key={index} className="space-y-4">
+            {/* User Message */}
+            <div className="flex justify-end agri-fade-in">
+              <div className="flex items-start gap-4 max-w-[85%] md:max-w-[75%]">
+                <div className="chat-bubble-user flex-1 text-sm leading-relaxed font-medium">
+                  {entry.question}
+                </div>
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-agri-primary to-agri-success flex items-center justify-center shadow-agri-md ring-2 ring-white/20">
+                  <User size={18} className="text-white" />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* AI Response */}
-          {entry.answer !== null ? (
-            <div className="flex justify-start agri-fade-in">
-              <div className="flex items-start gap-4 max-w-[85%] md:max-w-[75%]">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-agri-success to-nature-leaf flex items-center justify-center shadow-agri-md ring-2 ring-agri-success/20">
-                  <Bot size={18} className="text-white" />
-                </div>
-                <div className="chat-bubble-ai flex-1 text-sm leading-relaxed">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1 whitespace-pre-wrap break-words overflow-x-hidden text-gray-800 dark:text-gray-200">
-                      {Array.isArray(entry.answer) ? (
-                        <ul className="list-disc pl-5 space-y-1">
-                          {entry.answer.map((item, idx) => (
-                            <li key={idx}>{item}</li>
-                          ))}
-                        </ul>
-                      ) : typeof entry.answer === "string" &&
-                        entry.answer.length > 180 &&
-                        entry.answer.includes("\n") ? (
-                        <ul className="list-disc pl-5 space-y-1">
-                          {entry.answer
-                            .split(/\n|\r/)
-                            .filter(Boolean)
-                            .map((line, idx) => (
-                              <li key={idx}>{line}</li>
+            {/* AI Response */}
+            {entry.answer !== null ? (
+              <div className="flex justify-start agri-fade-in">
+                <div className="flex items-start gap-4 max-w-[85%] md:max-w-[75%]">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-agri-success to-nature-leaf flex items-center justify-center shadow-agri-md ring-2 ring-agri-success/20">
+                    <Bot size={18} className="text-white" />
+                  </div>
+                  <div className="chat-bubble-ai flex-1 text-sm leading-relaxed">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 whitespace-pre-wrap break-words overflow-x-hidden text-gray-800 dark:text-gray-200">
+                        {Array.isArray(entry.answer) ? (
+                          <ul className="list-disc pl-5 space-y-1">
+                            {entry.answer.map((item, idx) => (
+                              <li key={idx}>{item}</li>
                             ))}
-                        </ul>
-                      ) : (
-                        entry.answer
-                      )}
+                          </ul>
+                        ) : typeof entry.answer === "string" &&
+                          entry.answer.length > 180 &&
+                          entry.answer.includes("\n") ? (
+                          <ul className="list-disc pl-5 space-y-1">
+                            {entry.answer
+                              .split(/\n|\r/)
+                              .filter(Boolean)
+                              .map((line, idx) => (
+                                <li key={idx}>{line}</li>
+                              ))}
+                          </ul>
+                        ) : (
+                          entry.answer
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 pl-2">
+                        <button
+                          onClick={() => {
+                            try {
+                              navigator.clipboard.writeText(entry.answer || "");
+                              const toast = document.createElement("div");
+                              toast.textContent = "Copied!";
+                              toast.className =
+                                "fixed bottom-4 left-1/2 -translate-x-1/2 bg-agri-primary text-white text-xs px-4 py-2 rounded-xl shadow-agri-lg z-50 font-medium";
+                              document.body.appendChild(toast);
+                              setTimeout(() => toast.remove(), 1200);
+                            } catch { }
+                          }}
+                          title="Copy"
+                          className="p-2 rounded-lg text-gray-400 hover:text-agri-success hover:bg-agri-success/10 transition-all duration-200"
+                        >
+                          <Copy size={16} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const text = encodeURIComponent(entry.answer || "");
+                            const url = `https://wa.me/?text=${text}`;
+                            window.open(url, "_blank");
+                          }}
+                          title="Share via WhatsApp"
+                          className="p-2 rounded-lg text-gray-400 hover:text-agri-accent hover:bg-agri-accent/10 transition-all duration-200"
+                        >
+                          <Share2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => onSpeak?.(entry.answer)}
+                          aria-label={
+                            isSpeaking ? t("stopReading") : t("readAnswer")
+                          }
+                          className="p-2 rounded-lg text-gray-400 hover:text-agri-info hover:bg-agri-info/10 transition-all duration-200"
+                        >
+                          {isSpeaking ? "⏹️" : "🔊"}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 pl-2">
-                      <button
-                        onClick={() => {
-                          try {
-                            navigator.clipboard.writeText(entry.answer || "");
-                            const toast = document.createElement("div");
-                            toast.textContent = "Copied!";
-                            toast.className =
-                              "fixed bottom-4 left-1/2 -translate-x-1/2 bg-agri-primary text-white text-xs px-4 py-2 rounded-xl shadow-agri-lg z-50 font-medium";
-                            document.body.appendChild(toast);
-                            setTimeout(() => toast.remove(), 1200);
-                          } catch {}
-                        }}
-                        title="Copy"
-                        className="p-2 rounded-lg text-gray-400 hover:text-agri-success hover:bg-agri-success/10 transition-all duration-200"
-                      >
-                        <Copy size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          const text = encodeURIComponent(entry.answer || "");
-                          const url = `https://wa.me/?text=${text}`;
-                          window.open(url, "_blank");
-                        }}
-                        title="Share via WhatsApp"
-                        className="p-2 rounded-lg text-gray-400 hover:text-agri-accent hover:bg-agri-accent/10 transition-all duration-200"
-                      >
-                        <Share2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => onSpeak?.(entry.answer)}
-                        aria-label={
-                          isSpeaking ? t("stopReading") : t("readAnswer")
-                        }
-                        className="p-2 rounded-lg text-gray-400 hover:text-agri-info hover:bg-agri-info/10 transition-all duration-200"
-                      >
-                        {isSpeaking ? "⏹️" : "🔊"}
-                      </button>
-                    </div>
-                  </div>
-                  {entry.timestamp && (
-                    <div className="mt-3 text-xs text-gray-400 dark:text-gray-500 font-medium">
-                      {new Date(entry.timestamp).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-start agri-fade-in">
-              <div className="flex items-start gap-4 max-w-[85%] md:max-w-[75%]">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-agri-success to-nature-leaf flex items-center justify-center shadow-agri-md ring-2 ring-agri-success/20 agri-pulse">
-                  <Bot size={18} className="text-white" />
-                </div>
-                <div className="chat-bubble-ai flex-1 break-words overflow-x-hidden">
-                  <div className="flex items-center gap-3">
-                    <div className="flex space-x-1">
-                      <div className="w-2.5 h-2.5 bg-agri-success rounded-full agri-bounce"></div>
-                      <div
-                        className="w-2.5 h-2.5 bg-agri-success rounded-full agri-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      ></div>
-                      <div
-                        className="w-2.5 h-2.5 bg-agri-success rounded-full agri-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
-                    </div>
-                    <span className="text-sm text-agri-primary dark:text-agri-success font-medium">
-                      AI is thinking...
-                    </span>
+                    {entry.timestamp && (
+                      <div className="mt-3 text-xs text-gray-400 dark:text-gray-500 font-medium">
+                        {new Date(entry.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      ))}
+            ) : (
+              <div className="flex justify-start agri-fade-in">
+                <div className="flex items-start gap-4 max-w-[85%] md:max-w-[75%]">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-agri-success to-nature-leaf flex items-center justify-center shadow-agri-md ring-2 ring-agri-success/20 agri-pulse">
+                    <Bot size={18} className="text-white" />
+                  </div>
+                  <div className="chat-bubble-ai flex-1 break-words overflow-x-hidden">
+                    <div className="flex items-center gap-3">
+                      <div className="flex space-x-1">
+                        <div className="w-2.5 h-2.5 bg-agri-success rounded-full agri-bounce"></div>
+                        <div
+                          className="w-2.5 h-2.5 bg-agri-success rounded-full agri-bounce"
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
+                          className="w-2.5 h-2.5 bg-agri-success rounded-full agri-bounce"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
+                      <span className="text-sm text-agri-primary dark:text-agri-success font-medium">
+                        AI is thinking...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
 
       <div ref={endRef} />
       {isLoading && conversation.length === 0 && (
@@ -214,7 +214,7 @@ const QuestionInput = ({
 
   return (
     <div className="max-w-4xl mx-auto relative">
-       {hasPendingImage && (
+      {hasPendingImage && (
         <div className="absolute bottom-full left-4 mb-2 text-sm text-agri-primary dark:text-agri-success flex items-center gap-3 px-3 py-2 bg-agri-primary/10 dark:bg-agri-success/10 rounded-xl border border-agri-primary/20 dark:border-agri-success/20 shadow-lg">
           <Image size={16} className="flex-shrink-0" />
           <span className="font-medium">{t("imageAttached")}</span>
@@ -283,7 +283,7 @@ const Chat = ({
   userId,
   conversationId,
   onConversationIdChange,
-  indexReady,
+  indexReady = true,
   isDashboardView,
   embedOnDashboard,
 }) => {
@@ -380,11 +380,11 @@ const Chat = ({
   // Generate localized suggestions based on user profile
   const generateLocalizedSuggestions = useCallback((userProfile) => {
     if (!userProfile) return [];
-    
+
     const { state, crop } = userProfile;
     const suggestions = [];
     const lowerCrop = crop?.toLowerCase() || '';
-    
+
     // Crop-specific suggestions
     if (lowerCrop.includes('wheat')) {
       suggestions.push(
@@ -411,14 +411,14 @@ const Chat = ({
         t('suggestions.sugarcane.subsidySchemes', { state: state || t('selectState') })
       );
     }
-    
+
     // Add general suggestions
     suggestions.push(
       t('suggestions.general.marketPrices', { crop: crop || t('primaryCrop'), state: state || t('selectState') }),
       t('suggestions.general.soilHealth'),
       t('suggestions.general.loanSubsidy')
     );
-    
+
     // Remove duplicates and limit to 4
     const uniqueSuggestions = [...new Set(suggestions)];
     return uniqueSuggestions.slice(0, 4);
@@ -550,7 +550,7 @@ const Chat = ({
       const uid = localStorage.getItem("user_id") || userId;
       let res;
       if (hasImage) {
-        try { console.debug('[Chat] Sending analyze_image with mime', pendingImage?.mime, 'b64.len', (pendingImage?.base64||'').length); } catch {}
+        try { console.debug('[Chat] Sending analyze_image with mime', pendingImage?.mime, 'b64.len', (pendingImage?.base64 || '').length); } catch { }
         res = await axios.post("http://127.0.0.1:8000/analyze_image", {
           user_id: uid,
           image_base64: pendingImage.base64,
@@ -606,7 +606,7 @@ const Chat = ({
         interimResults: false,
         language: lang,
       });
-    } catch {}
+    } catch { }
   };
 
   const handleSpeak = (text) => {
@@ -642,10 +642,10 @@ const Chat = ({
             'Microsoft Swara Online (Natural) - Hindi (India)'
           ];
           let match = voices.find(v => (v.lang || '').toLowerCase().startsWith(lang.toLowerCase()))
-            || voices.find(v => (v.lang || '').toLowerCase().startsWith(lang.slice(0,2).toLowerCase()));
+            || voices.find(v => (v.lang || '').toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
           if (!match) match = voices.find(v => preferredNames.includes(v.name));
           if (match) utterance.voice = match;
-        } catch {}
+        } catch { }
         utterance.onend = () => setIsSpeaking(false);
         setIsSpeaking(true);
         synth.cancel();
@@ -656,19 +656,19 @@ const Chat = ({
       const available = synth.getVoices ? synth.getVoices() : [];
       if (!available || available.length === 0) {
         const once = () => {
-          try { synth.removeEventListener('voiceschanged', once); } catch {}
+          try { synth.removeEventListener('voiceschanged', once); } catch { }
           speakWithVoice();
         };
         try { synth.addEventListener('voiceschanged', once); } catch { speakWithVoice(); }
         // Also set a short timeout fallback in case event doesn't fire
         setTimeout(() => {
-          try { synth.removeEventListener('voiceschanged', once); } catch {}
+          try { synth.removeEventListener('voiceschanged', once); } catch { }
           if (!synth.speaking) speakWithVoice();
         }, 500);
       } else {
         speakWithVoice();
       }
-    } catch {}
+    } catch { }
   };
 
   const openFilePicker = () => {
@@ -681,9 +681,11 @@ const Chat = ({
         if (!file) return;
         try {
           const b64 = await toBase64(file);
-          try { console.debug('[Chat] Selected image', { name: file.name, type: file.type, size: file.size, b64len: b64.length }); } catch {}
+          try { console.debug('[Chat] Selected image', { name: file.name, type: file.type, size: file.size, b64len: b64.length }); } catch { }
           setPendingImage({ base64: b64, mime: file.type || "image/jpeg" });
-        } catch (_) {}
+        } catch (_) { }
+        // Reset the input so the same file can be selected again
+        e.target.value = '';
       };
       fileInputRef.current = input;
     }
@@ -791,7 +793,7 @@ const Chat = ({
           </button>
         )}
       </div>
-      
+
       {/* Sticky input area at bottom (always visible) */}
       <div className="sticky bottom-0 z-10 p-4 bg-transparent">
         <QuestionInput

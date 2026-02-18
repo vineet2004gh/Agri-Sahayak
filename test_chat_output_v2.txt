@@ -1,0 +1,4 @@
+Testing Chat RAG for user 369562d1-7899-4e4f-9115-c33ca1742b54...
+
+--- Sending Request ---
+Failed: 500 - {"detail":"Unable to generate answer: Error calling model 'gemini-1.5-flash' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"}

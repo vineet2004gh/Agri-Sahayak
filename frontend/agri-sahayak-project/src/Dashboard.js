@@ -278,7 +278,7 @@ export const WeatherWidget = ({ userId }) => {
     <Card title={title} right={<Sun size={18} className="text-agri-info" />} className="bg-gradient-to-br from-nature-sky/20 to-agri-info/10 dark:bg-agri-info/20 border-agri-info/30 col-span-1 md:col-span-2 lg:col-span-3 overflow-hidden relative">
       <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-agri-info/10 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
       <div className="flex flex-col md:flex-row gap-6 items-center relative z-10">
-        
+
         {/* Left Side: Main Info */}
         <div className="flex items-center gap-6 flex-1">
           <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center backdrop-blur-sm border border-white/30">
@@ -371,8 +371,8 @@ export const MarketTicker = ({ userId, onOpenChart }) => {
         {data.nearby_prices.map((item, index) => {
           const isUp = item.trend === 'up';
           return (
-            <div 
-              key={index} 
+            <div
+              key={index}
               onClick={onOpenChart}
               className={`flex justify-between items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 hover:scale-[1.02] ${item.is_user_district ? 'bg-gradient-to-r from-agri-success/20 to-agri-success/10 border-2 border-agri-success/30' : 'hover:bg-agri-primary/5 dark:hover:bg-gray-800/50 border border-transparent hover:border-agri-primary/20'}`}>
               <div>
@@ -542,9 +542,9 @@ export const RecentAlertsPanel = ({ userId }) => {
       ) : (
         <ul className="space-y-4">
           {alerts.slice(0, 3).map((a, idx) => {
-            const severity = severityMap[a.severity] || { 
-              label: a.severity, 
-              icon: Info, 
+            const severity = severityMap[a.severity] || {
+              label: a.severity,
+              icon: Info,
               colorClasses: 'bg-gray-100/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-300 border-gray-200',
               iconColor: 'text-gray-500',
             };
@@ -570,11 +570,25 @@ export const RecentAlertsPanel = ({ userId }) => {
   );
 };
 
-const Dashboard = ({ userId, children }) => {
+const Dashboard = ({ userId, children, scrollToCall, onScrollComplete }) => {
   const { t, i18n } = useTranslation();
   const [isChartOpen, setChartOpen] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
   const [callMsg, setCallMsg] = useState("");
+
+  useEffect(() => {
+    if (scrollToCall) {
+      // Small timeout to ensure rendering
+      const timer = setTimeout(() => {
+        const el = document.getElementById('voice-assistant');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (onScrollComplete) onScrollComplete();
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [scrollToCall, onScrollComplete]);
 
   const handleRequestCall = async () => {
     if (!userId) return;
@@ -596,40 +610,40 @@ const Dashboard = ({ userId, children }) => {
     <div className="space-y-6 md:space-y-8">
       {/* Voice Call Card */}
       <div id="voice-assistant">
-      <Card
-        title={(i18n.language === 'hi') ? 'वॉइस असिस्टेंट' : (t('VoiceAssistant') || 'Voice Assistant')}
-        right={<PhoneCall size={18} className="text-agri-success" />}
-        className="bg-gradient-to-r from-agri-success/10 to-agri-primary/10 dark:bg-agri-success/20 border-agri-success/30 relative overflow-hidden"
-      >
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-agri-success/10 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-agri-success/20 rounded-2xl flex items-center justify-center">
-              📞
+        <Card
+          title={(i18n.language === 'hi') ? 'वॉइस असिस्टेंट' : (t('VoiceAssistant') || 'Voice Assistant')}
+          right={<PhoneCall size={18} className="text-agri-success" />}
+          className="bg-gradient-to-r from-agri-success/10 to-agri-primary/10 dark:bg-agri-success/20 border-agri-success/30 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-agri-success/10 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 relative z-10">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-agri-success/20 rounded-2xl flex items-center justify-center">
+                📞
+              </div>
+              <div>
+                <p className="text-base font-semibold text-agri-primary dark:text-gray-200 mb-1">
+                  {i18n.language === 'hi' ? 'एआई सहायक से बात करें' : 'Speak with AI Assistant'}
+                </p>
+                <p className="text-sm text-agri-secondary dark:text-gray-400">
+                  {i18n.language === 'hi' ? 'अपनी पसंदीदा भाषा में त्वरित वॉइस सहायता पाएं' : 'Get instant voice support in your preferred language'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-base font-semibold text-agri-primary dark:text-gray-200 mb-1">
-                {i18n.language === 'hi' ? 'एआई सहायक से बात करें' : 'Speak with AI Assistant'}
-              </p>
-              <p className="text-sm text-agri-secondary dark:text-gray-400">
-                {i18n.language === 'hi' ? 'अपनी पसंदीदा भाषा में त्वरित वॉइस सहायता पाएं' : 'Get instant voice support in your preferred language'}
-              </p>
+            <div className="flex items-center gap-4">
+              {callMsg ? (
+                <span className="text-sm text-agri-primary dark:text-gray-400 font-medium">{callMsg}</span>
+              ) : null}
+              <button
+                onClick={handleRequestCall}
+                disabled={isCalling}
+                className={`px-6 py-3 rounded-2xl text-white font-semibold transition-all duration-300 shadow-agri-md hover:shadow-agri-lg hover:scale-105 ${isCalling ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-agri-success to-agri-primary hover:from-agri-primary hover:to-agri-success'}`}
+              >
+                {isCalling ? (i18n.language === 'hi' ? '📞 अनुरोध कर रहे…' : '📞 Requesting…') : (i18n.language === 'hi' ? '📞 कॉल का अनुरोध करें' : '📞 Request Call')}
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            {callMsg ? (
-              <span className="text-sm text-agri-primary dark:text-gray-400 font-medium">{callMsg}</span>
-            ) : null}
-            <button
-              onClick={handleRequestCall}
-              disabled={isCalling}
-              className={`px-6 py-3 rounded-2xl text-white font-semibold transition-all duration-300 shadow-agri-md hover:shadow-agri-lg hover:scale-105 ${isCalling ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-agri-success to-agri-primary hover:from-agri-primary hover:to-agri-success'}`}
-            >
-              {isCalling ? (i18n.language === 'hi' ? '📞 अनुरोध कर रहे…' : '📞 Requesting…') : (i18n.language === 'hi' ? '📞 कॉल का अनुरोध करें' : '📞 Request Call')}
-            </button>
-          </div>
-        </div>
-      </Card>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -644,6 +658,6 @@ const Dashboard = ({ userId, children }) => {
     </div>
   );
 }
-;
+  ;
 
 export default Dashboard;
