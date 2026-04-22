@@ -50,7 +50,7 @@ const Welcome = ({ onRegister, onSignIn }) => {
                 {t("welcomeToAgriSahayak")}
               </h1>
               <p className="text-agri-secondary dark:text-gray-400 font-medium">
-                Smart Agricultural Assistant
+                {t('smartAgriculturalAssistant')}
               </p>
             </div>
           </div>
@@ -70,7 +70,7 @@ const Welcome = ({ onRegister, onSignIn }) => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email address"
+                  placeholder={t('enterEmail')}
                   className="input rounded-2xl py-4 px-5 pr-14 text-base transition-all duration-300 focus:shadow-agri-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:border-agri-primary/50 focus:ring-2 focus:ring-agri-primary/20"
                   aria-label={t("email")}
                 />
@@ -79,7 +79,7 @@ const Welcome = ({ onRegister, onSignIn }) => {
                 </span>
               </div>
               <p className="mt-3 text-sm text-agri-secondary dark:text-gray-400 font-medium">
-                🔒 We'll never share your email.
+                🔒 {t('emailPrivacy')}
               </p>
             </div>
 
@@ -92,7 +92,7 @@ const Welcome = ({ onRegister, onSignIn }) => {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder={t('enterPassword')}
                   className="input rounded-2xl py-4 px-5 pr-14 text-base transition-all duration-300 focus:shadow-agri-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:border-agri-primary/50 focus:ring-2 focus:ring-agri-primary/20"
                   aria-label={t("password")}
                 />
@@ -107,7 +107,7 @@ const Welcome = ({ onRegister, onSignIn }) => {
               </div>
               <div className="mt-3 text-sm text-agri-secondary dark:text-gray-400">
                 <button type="button" className="btn-link p-0 text-sm hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-agri-primary/30">
-                  Forgot password?
+                  {t('forgotPassword')}
                 </button>
               </div>
             </div>
@@ -117,7 +117,7 @@ const Welcome = ({ onRegister, onSignIn }) => {
               className="btn-primary rounded-2xl py-4 px-8 text-lg font-bold shadow-agri-md hover:shadow-agri-lg transition-all duration-300 w-full hover:scale-[1.02] disabled:hover:scale-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-agri-primary/30"
               disabled={isLoading}
             >
-              {isLoading ? '🔄 Signing in...' : `🚀 ${t("signInWithEmailButton")}`}
+              {isLoading ? `🔄 ${t('signingIn')}` : `🚀 ${t("signInWithEmailButton")}`}
             </button>
 
             <div className="flex items-center justify-between pt-4">
@@ -136,37 +136,37 @@ const Welcome = ({ onRegister, onSignIn }) => {
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12"></div>
           <div className="space-y-6 text-center relative z-10">
             <img src="/logo_new.png" alt="Agri‑Sahayak" className="w-20 h-20 rounded-3xl mx-auto mb-6 backdrop-blur-sm bg-white/20 p-2" />
-            <h2 className="text-3xl font-bold mb-2 tracking-tight">AI Powered End to End System</h2>
-            <p className="text-white/85 mb-2 text-sm uppercase tracking-wide opacity-80">AI Powered End to End System</p>
+            <h2 className="text-3xl font-bold mb-2 tracking-tight">{t('aiPoweredSystem')}</h2>
+            <p className="text-white/85 mb-2 text-sm uppercase tracking-wide opacity-80">{t('aiPoweredSystem')}</p>
             <div className="space-y-4 text-base opacity-95 text-left w-full max-w-xs mx-auto">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
                   <Globe2 size={18} />
                 </span>
-                <span className="leading-tight">Smart, multilingual advisory</span>
+                <span className="leading-tight">{t('smartMultilingualAdvisory')}</span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
                   <Mic2 size={18} />
                 </span>
-                <span className="leading-tight">Voice-powered assistance</span>
+                <span className="leading-tight">{t('voicePoweredAssistance')}</span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
                   <ImageIcon size={18} />
                 </span>
-                <span className="leading-tight">AI image analysis</span>
+                <span className="leading-tight">{t('aiImageAnalysis')}</span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
                   <LineChart size={18} />
                 </span>
-                <span className="leading-tight">Real‑time market insights</span>
+                <span className="leading-tight">{t('realTimeMarketInsights')}</span>
               </div>
             </div>
             <div className="pt-6">
               <p className="text-white/85 text-sm font-medium tracking-wide">
-                Empowering farmers with intelligent technology
+                {t('empoweringFarmers')}
               </p>
             </div>
           </div>

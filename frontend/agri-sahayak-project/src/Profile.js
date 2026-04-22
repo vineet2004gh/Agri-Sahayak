@@ -80,11 +80,11 @@ const Profile = ({ onCreated, onBack }) => {
                   type="button"
                   onClick={onBack}
                   className="inline-flex items-center gap-2 text-agri-primary hover:text-agri-success font-semibold px-2 py-1 rounded-xl hover:bg-agri-primary/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-agri-primary/30"
-                  aria-label={'Back to SignIn'}
-                  title={'Back to SignIn'}
+                  aria-label={t('backToSignIn')}
+                  title={t('backToSignIn')}
                 >
                   <ArrowLeft size={18} />
-                  <span>Back to SignIn</span>
+                  <span>{t('backToSignIn')}</span>
                 </button>
               </div>
             )}
@@ -97,7 +97,7 @@ const Profile = ({ onCreated, onBack }) => {
                   {t("createYourProfile")}
                 </h2>
                 <p className="text-agri-secondary font-medium">
-                  Personalized Agricultural Assistant
+                  {t('personalizedAssistant')}
                 </p>
               </div>
             </div>
@@ -111,7 +111,7 @@ const Profile = ({ onCreated, onBack }) => {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your full name"
+                  placeholder={t('enterFullName')}
                   className="input rounded-2xl py-4 px-5 text-base transition-all duration-300 focus:shadow-agri-md"
                 />
               </div>
@@ -124,7 +124,7 @@ const Profile = ({ onCreated, onBack }) => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email address"
+                  placeholder={t('enterEmail')}
                   className="input rounded-2xl py-4 px-5 text-base transition-all duration-300 focus:shadow-agri-md"
                 />
               </div>
@@ -137,7 +137,7 @@ const Profile = ({ onCreated, onBack }) => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create a secure password"
+                  placeholder={t('createSecurePassword')}
                   className="input rounded-2xl py-4 px-5 text-base transition-all duration-300 focus:shadow-agri-md"
                 />
               </div>
@@ -150,7 +150,7 @@ const Profile = ({ onCreated, onBack }) => {
                   type="tel"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="Enter your mobile number"
+                  placeholder={t('enterMobileNumber')}
                   className="input rounded-2xl py-4 px-5 text-base transition-all duration-300 focus:shadow-agri-md"
                 />
               </div>
@@ -218,7 +218,7 @@ const Profile = ({ onCreated, onBack }) => {
                   type="text"
                   value={crop}
                   onChange={(e) => setCrop(e.target.value)}
-                  placeholder="e.g., Rice, Wheat, Cotton, Sugarcane"
+                  placeholder={t('cropPlaceholder')}
                   className="input rounded-2xl py-4 px-5 text-base transition-all duration-300 focus:shadow-agri-md"
                 />
               </div>
@@ -228,7 +228,7 @@ const Profile = ({ onCreated, onBack }) => {
                 className="btn-primary w-full rounded-2xl py-4 px-8 text-lg font-bold shadow-agri-md hover:shadow-agri-lg transition-all duration-300 hover:scale-[1.02] disabled:hover:scale-100 mt-6"
                 disabled={isLoading}
               >
-                {isLoading ? '⏳ Creating Profile...' : `🚀 ${t("createProfile")}`}
+                {isLoading ? `⏳ ${t('creatingProfile')}` : `🚀 ${t("createProfile")}`}
               </button>
             </form>
           </div>
@@ -242,37 +242,37 @@ const Profile = ({ onCreated, onBack }) => {
               <div className="w-18 h-18 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
                 <img src="/logo_new.png" alt="Agri‑Sahayak" className="w-14 h-14 rounded-2xl bg-white/15 p-2" />
               </div>
-              <h3 className="text-2xl font-bold mb-1">AI Powered End to End System</h3>
-              <p className="text-white/85 text-xs uppercase tracking-wide opacity-80 mb-2">AI Powered End to End System</p>
+              <h3 className="text-2xl font-bold mb-1">{t('aiPoweredSystem')}</h3>
+              <p className="text-white/85 text-xs uppercase tracking-wide opacity-80 mb-2">{t('aiPoweredSystem')}</p>
               <div className="space-y-4 text-base opacity-95 text-left w-full max-w-xs mx-auto">
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
                     <MapPin size={18} />
                   </span>
-                  <span className="leading-tight">Location‑based advice</span>
+                  <span className="leading-tight">{t('locationBasedAdvice')}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
                     <Sprout size={18} />
                   </span>
-                  <span className="leading-tight">Crop‑specific guidance</span>
+                  <span className="leading-tight">{t('cropSpecificGuidance')}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
                     <Globe2 size={18} />
                   </span>
-                  <span className="leading-tight">Multilingual support</span>
+                  <span className="leading-tight">{t('multilingualSupport')}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
                     <PhoneCall size={18} />
                   </span>
-                  <span className="leading-tight">Voice & SMS alerts</span>
+                  <span className="leading-tight">{t('voiceSmsAlerts')}</span>
                 </div>
               </div>
               <div className="pt-4">
                 <p className="text-white/85 text-sm font-medium tracking-wide">
-                  Personalized agricultural intelligence
+                  {t('personalizedIntelligence')}
                 </p>
               </div>
             </div>

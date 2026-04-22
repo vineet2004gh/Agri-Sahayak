@@ -465,7 +465,7 @@ const ConversationSidebar = ({
                   t("farmer")}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {userProfile?.email || "farmer@example.com"}
+                {userProfile?.email || "vnjain2004@gmail.com"}
               </div>
             </div>
           </button>

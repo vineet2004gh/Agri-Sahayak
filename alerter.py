@@ -78,12 +78,18 @@ CROP_ACTIVITIES = {
         "january": ["Pre-harvest check", "Harvesting preparation"],
     },
     "rice": {
+        "january": ["Rabi rice harvesting (if applicable)", "Seed procurement planning"],
+        "february": ["Land preparation and levelling", "Soil testing and nutrient planning"],
+        "march": ["Summer ploughing", "Green manure crop sowing"],
+        "april": ["Pre-kharif field preparation", "Input procurement (seed, fertilizer)"],
+        "may": ["Nursery bed preparation", "Seed treatment and soaking"],
         "june": ["Nursery preparation", "Seed selection"],
         "july": ["Transplanting", "Water management"],
         "august": ["Weed management", "Nutrient application"],
         "september": ["Pest and disease control", "Mid-season irrigation"],
         "october": ["Flowering stage care", "Grain filling monitoring"],
         "november": ["Harvesting", "Post-harvest handling"],
+        "december": ["Straw management and composting", "Rabi crop planning"],
     },
     "sugarcane": {
         "january": ["Planting", "Initial irrigation"],
@@ -506,6 +512,46 @@ def send_sms_alerts(users_in_district, weather_alerts, district):
             
         except Exception as e:
             logger.error(f"Failed to send SMS to {user.name} ({to_number}): {e}")
+
+
+def send_alert_sms_to_user(phone: str, name: str, district: str, alerts: list):
+    """Send alert SMS to a single user. Importable by routes.py.
+    
+    Args:
+        phone: User's phone number in E.164 format (e.g. +919900128590)
+        name: User's display name
+        district: User's district name
+        alerts: List of alert dicts with keys: type, message, severity
+    """
+    import threading
+
+    if not phone:
+        logger.info("[ALERT-SMS] No phone number, skipping.")
+        return
+
+    if not all([TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER]):
+        logger.warning("[ALERT-SMS] Twilio credentials not configured, skipping SMS.")
+        return
+
+    logger.info(f"[ALERT-SMS] Scheduling SMS to {name} ({phone}) with {len(alerts)} alert(s)...")
+
+    def _send():
+        try:
+            client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+            sms_body = build_sms_message(name, district, alerts)
+            logger.info(f"[ALERT-SMS] Sending: {sms_body}")
+            message = client.messages.create(
+                body=sms_body,
+                from_=TWILIO_PHONE_NUMBER,
+                to=phone,
+            )
+            logger.info(f"[ALERT-SMS] SUCCESS: SID={message.sid}, status={message.status}")
+        except Exception as e:
+            logger.error(f"[ALERT-SMS] FAILED to send to {phone}: {e}")
+
+    t = threading.Thread(target=_send, daemon=True)
+    t.start()
+
 
 def main():
     """Main function to orchestrate the alerting system"""

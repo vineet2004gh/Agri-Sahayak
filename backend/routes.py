@@ -35,6 +35,11 @@ import base64
 from deep_translator import GoogleTranslator
 import requests
 import re
+import sys
+
+# Allow importing alerter.py from the project root
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from alerter import send_alert_sms_to_user
 
 load_dotenv()
 router = APIRouter()
@@ -98,7 +103,7 @@ def _load_global_vector_store() -> FAISS:
                 status_code=500,
                 detail="Global FAISS index not found. Run ingestion script first."
             )
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         try:
             _global_vector_store = FAISS.load_local(
                 GLOBAL_INDEX_DIR,
@@ -331,24 +336,6 @@ def _is_hindi_language(value: str) -> bool:
     l = (value or "").strip().lower()
     return l in {"hindi", "hi", "हिन्दी", "हिंदी"} or ("हिं" in l) or ("हिन्द" in l)
 
-
-def _strip_markdown(text: str) -> str:
-    """Remove common Markdown formatting like **bold**, *italics*, inline code, and star bullets.
-    Keeps numbered lists. Also collapses excessive blank lines."""
-    try:
-        s = text or ""
-        # Remove bold and italics markers
-        s = re.sub(r"\*\*(.*?)\*\*", r"\1", s)
-        s = re.sub(r"\*(.*?)\*", r"\1", s)
-        # Remove inline/backtick code markers
-        s = re.sub(r"`{1,3}([^`]*)`{1,3}", r"\1", s)
-        # Remove leading star bullets like "* "
-        s = re.sub(r"(?m)^\s*\*\s+", "", s)
-        # Normalize multiple blank lines to max 2
-        s = re.sub(r"\n{3,}", "\n\n", s)
-        return s.strip()
-    except Exception:
-        return text
 
 @router.post("/create_profile")
 async def create_profile(req: CreateProfileRequest):
@@ -1289,12 +1276,18 @@ CROP_ACTIVITIES = {
         "january": ["Pre-harvest check", "Harvesting preparation"],
     },
     "rice": {
+        "january": ["Rabi rice harvesting (if applicable)", "Seed procurement planning"],
+        "february": ["Land preparation and levelling", "Soil testing and nutrient planning"],
+        "march": ["Summer ploughing", "Green manure crop sowing"],
+        "april": ["Pre-kharif field preparation", "Input procurement (seed, fertilizer)"],
+        "may": ["Nursery bed preparation", "Seed treatment and soaking"],
         "june": ["Nursery preparation", "Seed selection"],
         "july": ["Transplanting", "Water management"],
         "august": ["Weed management", "Nutrient application"],
         "september": ["Pest and disease control", "Mid-season irrigation"],
         "october": ["Flowering stage care", "Grain filling monitoring"],
         "november": ["Harvesting", "Post-harvest handling"],
+        "december": ["Straw management and composting", "Rabi crop planning"],
     },
     "sugarcane": {
         "january": ["Planting", "Initial irrigation"],
@@ -1610,6 +1603,15 @@ def analyze_weather_for_alerts(weather_data, district):
         return []
     
     alerts = []
+
+    # Demo alert — always present for demonstration purposes
+    # alerts.append({
+    #     'type': 'crop_advisory',
+    #     'title': 'Crop Activity Reminder',
+    #     'message': f"February is ideal for land preparation and soil testing for the upcoming Kharif season in {district.title()}. Start planning your inputs now.",
+    #     'severity': 'high',
+    #     'icon': '🌾'
+    # })
     
     for day_idx in range(min(2, len(weather_data['daily']))):
         day_data = weather_data['daily'][day_idx]
@@ -1695,6 +1697,12 @@ async def get_weather_alerts(user_id: str):
         for alert in alerts:
             alert['timestamp'] = datetime.now().isoformat()
             alert['district'] = user_district.title()
+        
+        # Send SMS via alerter.py if alerts are non-empty
+        if alerts:
+            phone = (user.get("phone_number") or "").strip()
+            name = user.get("name", "Farmer")
+            send_alert_sms_to_user(phone, name, user_district, alerts)
         
         return {
             "alerts": alerts,
