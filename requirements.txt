@@ -16,3 +16,15 @@ bcrypt
 deep-translator
 twilio
 requests
+tensorflow
+tf-keras
+xgboost
+joblib
+scikit-learn
+Pillow
+langgraph
+pandas
+arch
+statsmodels
+EMD-signal
+pmdarimaearthengine-api==1.7.22

@@ -5,7 +5,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 import google.generativeai as genai
 from langchain_core.messages import HumanMessage
 from langchain_community.vectorstores import FAISS
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -16,6 +16,20 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
+# Load the raw key from .env (may include surrounding quotes)
+raw_key = os.getenv("GOOGLE_API_KEY")
+GOOGLE_API_KEY = None
+if raw_key:
+    cleaned_key = raw_key.strip('"\'')
+    GOOGLE_API_KEY = cleaned_key
+    # Set environment variables for both legacy and new SDKs
+    os.environ.setdefault("GEMINI_API_KEY", cleaned_key)
+    os.environ.setdefault("GOOGLE_API_KEY", cleaned_key)
+    # Configure legacy SDK
+    genai.configure(api_key=cleaned_key)
+    print(f"[Config] Gemini API key configured (len {len(cleaned_key)})")
+else:
+    print("[Config] Gemini API key missing!")
 from .database import (
     get_db_connection,
     insert_user,
@@ -41,7 +55,19 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from alerter import send_alert_sms_to_user
 
+# ML model pipelines
+from .disease_prediction_graph import run_disease_prediction
+from .yield_prediction import run_yield_prediction, get_available_crops, KHARIF_CROPS, RABI_CROPS
+from .market_price_prediction import run_price_prediction
+
 load_dotenv()
+# Load and clean Google API key – remove any surrounding quotes that may be present in .env
+raw_key = os.getenv("GOOGLE_API_KEY")
+if raw_key:
+    GOOGLE_API_KEY = raw_key.strip('"\'')
+else:
+    GOOGLE_API_KEY = None
+print(f"[Config] GOOGLE_API_KEY loaded: {'YES' if GOOGLE_API_KEY else 'NO'} (length {len(GOOGLE_API_KEY) if GOOGLE_API_KEY else 0})")
 router = APIRouter()
 
 # Nearby mandis mapping for price comparison
@@ -485,13 +511,31 @@ async def ask(req: AskRequest):
     original_question = question
     processed_question = question
 
-    # Check if this is a price/market query
+    # Check if this is a price FORECAST query (predict future prices)
+    price_forecast_keywords = ['price prediction', 'price forecast', 'future price', 'price tomorrow',
+                                'price next week', 'predict price', 'price trend', 'will price',
+                                'price hoga', 'bhav kya hoga', 'दाम क्या होगा', 'भाव भविष्य']
+    is_price_forecast = any(kw in question.lower() for kw in price_forecast_keywords)
+
+    if is_price_forecast:
+        return await handle_price_forecast_query(req, user, question, original_question, user_language)
+
+    # Check if this is a price/market query (current prices)
     price_keywords = ['price', 'market', 'rate', 'mandi', 'cost', 'भाव', 'दाम', 'मंडी', 'कीमत']
     is_price_query = any(keyword in question.lower() for keyword in price_keywords)
     
     if is_price_query:
         # Handle market price comparison
         return await handle_price_query(req, user, question, original_question, user_language)
+
+    # Check if this is a yield/harvest/production query
+    yield_keywords = ['yield', 'harvest', 'production', 'output', 'predict yield',
+                      'expected yield', 'crop yield', 'how much', 'kitna paida',
+                      'उपज', 'पैदावार', 'फसल उत्पादन', 'कितना होगा']
+    is_yield_query = any(keyword in question.lower() for keyword in yield_keywords)
+
+    if is_yield_query:
+        return await handle_yield_query(req, user, question, original_question, user_language)
     
     # If user prefers Hindi, translate question to English for processing
     if _is_hindi_language(user_language):
@@ -945,10 +989,16 @@ async def generate_price_response(context: str, question: str, user_language: st
         answer = ""
         if hasattr(response, 'content'):
             answer = response.content
+            if isinstance(answer, list):
+                # Langchain might return a list of content blocks
+                answer = " ".join([str(b.get("text", "")) if isinstance(b, dict) else str(b) for b in answer])
         elif hasattr(response, 'output_text'):
             answer = response.output_text
         else:
             answer = str(response)
+            
+        if not isinstance(answer, str):
+            answer = str(answer)
         
         # Translate to Hindi if needed
         if _is_hindi_language(user_language):
@@ -1053,7 +1103,6 @@ async def analyze_image(req: AnalyzeImageRequest):
         raise HTTPException(status_code=500, detail="Google API key missing")
 
     try:
-        genai.configure(api_key=GOOGLE_API_KEY)
         # ----------------------------
         # 1. Validate Base64 Image
         # ----------------------------
@@ -1066,49 +1115,39 @@ async def analyze_image(req: AnalyzeImageRequest):
             raise HTTPException(status_code=400, detail="Image too large (max 5MB)")
 
         # ----------------------------
-        # 2. Create Gemini Model
+        # 2. Run Disease Prediction Pipeline
+        #    (Keras CNN → Gemini enrichment)
         # ----------------------------
-        model = genai.GenerativeModel("gemini-flash-latest")
-
-        # ----------------------------
-        # 3. Send Multimodal Request
-        # ----------------------------
-        response = model.generate_content(
-            [
-                "Analyze this agricultural image and provide practical farming advice in simple language.",
-                {
-                    "mime_type": req.mime_type,
-                    "data": image_bytes,
-                },
-            ]
+        print("[analyze_image] Running disease prediction pipeline...")
+        result = run_disease_prediction(
+            image_base64=req.image_base64,
+            google_api_key=GOOGLE_API_KEY,
         )
 
-        # ----------------------------
-        # 4. Extract Text Safely
-        # ----------------------------
-        if not response or not response.text:
-            answer = "Unable to analyze image. Please upload a clearer photo."
-        else:
-            answer = response.text
+        predicted_class = result.get("predicted_class", "unknown")
+        confidence = result.get("confidence", 0.0)
+        answer = result.get("response", "Unable to analyze image.")
+
+        print("[analyze_image] Disease prediction pipeline completed successfully.")
 
     except HTTPException:
         raise
 
     except Exception as e:
-        print("GEMINI ERROR:", str(e))
+        print("DISEASE PREDICTION ERROR:", str(e))
         raise HTTPException(
             status_code=500,
             detail="Image analysis failed. Please try again."
         )
 
     # ----------------------------
-    # 5. Store Conversation
+    # 3. Store Conversation
     # ----------------------------
     try:
         conv_id = req.conversation_id or os.urandom(16).hex()
         insert_conversation(
             req.user_id,
-            req.question or "Image analysis",
+            req.question or "Crop disease analysis",
             answer,
             conversation_id=conv_id
         )
@@ -1118,8 +1157,262 @@ async def analyze_image(req: AnalyzeImageRequest):
 
     return {
         "answer": answer,
-        "conversation_id": conv_id
+        "conversation_id": conv_id,
+        "predicted_class": predicted_class,
+        "confidence": confidence,
     }
+
+
+# ---------------------------------------------------------------------------
+# Yield Prediction endpoint
+# ---------------------------------------------------------------------------
+
+class PredictYieldRequest(BaseModel):
+    user_id: str
+    crop: Optional[str] = None
+    season: Optional[str] = None
+    area_hectares: Optional[float] = None
+
+
+@router.post("/predict_yield")
+async def predict_yield(req: PredictYieldRequest):
+    """Predict crop yield using XGBoost models and interpret with Gemini.
+
+    If crop/season are not provided, falls back to the user's profile crop.
+    """
+    user = fetch_user_by_id(req.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not GOOGLE_API_KEY:
+        raise HTTPException(status_code=500, detail="Google API key missing")
+
+    # Resolve crop from request or user profile
+    crop = (req.crop or user.get("crop") or "").strip().lower()
+    crop = normalize_crop_name(crop)
+    if not crop:
+        raise HTTPException(status_code=400, detail="Crop name is required. Provide it in the request or update your profile.")
+
+    # Resolve season — auto-detect if not provided
+    season = (req.season or "").strip().lower()
+
+    user_state = (user.get("state") or "").strip()
+    user_district = (user.get("district") or "").strip()
+
+    try:
+        result = run_yield_prediction(
+            crop=crop,
+            season=season,
+            google_api_key=GOOGLE_API_KEY,
+            state=user_state,
+            district=user_district,
+        )
+
+        # Store conversation
+        conv_id = os.urandom(16).hex()
+        question = f"Yield prediction for {crop} ({season or 'auto-detected'} season)"
+        answer = result.get("response", "Yield prediction could not be completed.")
+        try:
+            insert_conversation(req.user_id, question, answer, conversation_id=conv_id)
+        except Exception as db_err:
+            print(f"DB ERROR: {db_err}")
+
+        return {
+            "answer": answer,
+            "predicted_yield": result.get("predicted_yield"),
+            "yield_unit": result.get("yield_unit"),
+            "crop": result.get("crop"),
+            "season": result.get("season"),
+            "conversation_id": conv_id,
+            "error": result.get("error"),
+        }
+
+    except Exception as e:
+        print(f"Yield prediction error: {e}")
+        raise HTTPException(status_code=500, detail=f"Yield prediction failed: {str(e)}")
+
+
+@router.get("/available_crops")
+async def available_crops():
+    """Return lists of crops available for yield prediction by season."""
+    return get_available_crops()
+
+
+# ---------------------------------------------------------------------------
+# Market Price Prediction endpoints
+# ---------------------------------------------------------------------------
+
+class PredictPriceRequest(BaseModel):
+    user_id: str
+    crop: Optional[str] = None
+    forecast_days: Optional[int] = 7
+
+
+@router.post("/predict_price")
+async def predict_price(req: PredictPriceRequest):
+    """Predict future market prices using ARIMA-GARCH family models."""
+    user = fetch_user_by_id(req.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not GOOGLE_API_KEY:
+        raise HTTPException(status_code=500, detail="Google API key missing")
+
+    crop = (req.crop or user.get("crop") or "").strip().lower()
+    crop = normalize_crop_name(crop)
+    if not crop:
+        raise HTTPException(status_code=400, detail="Crop name is required.")
+
+    forecast_days = min(req.forecast_days or 7, 30)
+    user_state = (user.get("state") or "").strip()
+    user_district = (user.get("district") or "").strip()
+
+    try:
+        result = run_price_prediction(
+            crop=crop,
+            google_api_key=GOOGLE_API_KEY,
+            forecast_days=forecast_days,
+            district=user_district,
+            state=user_state,
+        )
+
+        conv_id = os.urandom(16).hex()
+        question = f"Price prediction for {crop} (next {forecast_days} days)"
+        answer = result.get("response", "Price prediction could not be completed.")
+        try:
+            insert_conversation(req.user_id, question, answer, conversation_id=conv_id)
+        except Exception as db_err:
+            print(f"DB ERROR: {db_err}")
+
+        result["conversation_id"] = conv_id
+        return result
+
+    except Exception as e:
+        print(f"Price prediction error: {e}")
+        raise HTTPException(status_code=500, detail=f"Price prediction failed: {str(e)}")
+
+
+@router.get("/model_comparison/{crop}")
+async def model_comparison(crop: str, forecast_days: int = 7):
+    """Compare all time-series models for a specific crop."""
+    from .market_price_prediction import fetch_commodity_prices, _generate_synthetic_prices, compare_models
+    crop = normalize_crop_name(crop.strip().lower())
+    df = fetch_commodity_prices(crop)
+    if df is None or len(df) < 30:
+        df = _generate_synthetic_prices(crop)
+    prices = df["price_inr"].dropna()
+    result = compare_models(prices, forecast_days)
+    # Clean for JSON
+    for m in result["models"]:
+        for k in ("fitted", "residuals", "forecast_variance", "forecast_returns"):
+            m.pop(k, None)
+        if m.get("aic") == float("inf"):
+            m["aic"] = None
+    return result
+
+
+async def handle_price_forecast_query(req: AskRequest, user: dict, question: str, original_question: str, user_language: str):
+    """Handle price prediction queries using ARIMA-GARCH models."""
+    try:
+        user_crop = normalize_crop_name((user.get("crop") or "").strip()).lower()
+        user_state = (user.get("state") or "").strip()
+        user_district = (user.get("district") or "").strip()
+
+        if not user_crop:
+            user_crop = extract_crop_from_question(question)
+        if not user_crop:
+            answer = "Please specify the crop name or update your profile for price predictions."
+            conv_id = req.conversation_id or str(os.urandom(16).hex())
+            return {"answer": answer, "conversation_id": conv_id}
+
+        result = run_price_prediction(
+            crop=user_crop,
+            google_api_key=GOOGLE_API_KEY,
+            forecast_days=7,
+            district=user_district,
+            state=user_state,
+        )
+
+        answer = result.get("response", "Price prediction could not be completed.")
+
+        if _is_hindi_language(user_language):
+            try:
+                answer = translate_text(answer, "en", "hi")
+            except Exception as e:
+                print(f"Translation failed: {e}")
+
+        conv_id = req.conversation_id or str(os.urandom(16).hex())
+        try:
+            insert_conversation(req.user_id, original_question, answer, conversation_id=conv_id)
+        except Exception as e:
+            print(f"Failed to save conversation: {e}")
+
+        return {"answer": answer, "conversation_id": conv_id}
+
+    except Exception as e:
+        print(f"Error in price forecast query: {e}")
+        return {
+            "answer": "I'm having trouble predicting prices right now. Please try again later.",
+            "conversation_id": req.conversation_id or str(os.urandom(16).hex()),
+        }
+
+
+async def handle_yield_query(req: AskRequest, user: dict, question: str, original_question: str, user_language: str):
+    """Handle yield/production related queries by running the yield prediction model."""
+    try:
+        user_crop = normalize_crop_name((user.get("crop") or "").strip()).lower()
+        user_state = (user.get("state") or "").strip()
+        user_district = (user.get("district") or "").strip()
+
+        # Try to extract crop from question if not in profile
+        if not user_crop:
+            user_crop = extract_crop_from_question(question)
+
+        if not user_crop:
+            answer = "Please specify the crop name in your question or update your profile with your primary crop for yield prediction."
+            conv_id = req.conversation_id or str(os.urandom(16).hex())
+            return {"answer": answer, "conversation_id": conv_id}
+
+        # Auto-detect season
+        season = ""
+        q_lower = question.lower()
+        if "kharif" in q_lower or "खरीफ" in q_lower:
+            season = "kharif"
+        elif "rabi" in q_lower or "रबी" in q_lower:
+            season = "rabi"
+        # else auto-detect in yield_prediction module
+
+        result = run_yield_prediction(
+            crop=user_crop,
+            season=season,
+            google_api_key=GOOGLE_API_KEY,
+            state=user_state,
+            district=user_district,
+        )
+
+        answer = result.get("response", "Yield prediction could not be completed.")
+
+        # Translate if needed
+        if _is_hindi_language(user_language):
+            try:
+                answer = translate_text(answer, "en", "hi")
+            except Exception as e:
+                print(f"Translation failed: {e}")
+
+        conv_id = req.conversation_id or str(os.urandom(16).hex())
+        try:
+            insert_conversation(req.user_id, original_question, answer, conversation_id=conv_id)
+        except Exception as e:
+            print(f"Failed to save conversation: {e}")
+
+        return {"answer": answer, "conversation_id": conv_id}
+
+    except Exception as e:
+        print(f"Error in yield query handling: {e}")
+        return {
+            "answer": "I'm having trouble predicting yield right now. Please try again later.",
+            "conversation_id": req.conversation_id or str(os.urandom(16).hex()),
+        }
 
 
 @router.get("/users/{user_id}")
